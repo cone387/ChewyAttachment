@@ -1,5 +1,6 @@
 """SQLModel models for ChewyAttachment FastAPI app"""
 
+import os
 import uuid
 from datetime import datetime
 
@@ -8,10 +9,18 @@ from sqlmodel import Field, SQLModel
 from ..core.schemas import FileMetadata
 
 
+def get_attachment_table_name() -> str:
+    """Get custom table name from environment variable or use default"""
+    return os.getenv("CHEWY_ATTACHMENT_TABLE_NAME", "chewy_attachment_files")
+
+
 class Attachment(SQLModel, table=True):
     """Attachment model for storing file metadata"""
 
-    __tablename__ = "chewy_attachment_files"
+    # Note: __tablename__ should be set before class instantiation
+    # For FastAPI, recommend using environment variable CHEWY_ATTACHMENT_TABLE_NAME
+    # or override this in your application
+    __tablename__: str = get_attachment_table_name()
 
     id: str = Field(
         default_factory=lambda: str(uuid.uuid4()),

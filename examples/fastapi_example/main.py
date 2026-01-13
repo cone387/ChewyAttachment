@@ -1,5 +1,6 @@
 """FastAPI example application for ChewyAttachment"""
 
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -10,6 +11,9 @@ from chewy_attachment.fastapi_app import dependencies, router
 BASE_DIR = Path(__file__).resolve().parent
 DATABASE_URL = f"sqlite:///{BASE_DIR}/attachments.db"
 STORAGE_ROOT = BASE_DIR / "media" / "attachments"
+
+# Optional: Set custom table name via environment variable
+# os.environ["CHEWY_ATTACHMENT_TABLE_NAME"] = "my_custom_attachments"
 
 dependencies.configure(DATABASE_URL, STORAGE_ROOT)
 

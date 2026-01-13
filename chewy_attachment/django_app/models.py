@@ -20,6 +20,12 @@ def get_storage_root():
     return Path(base_dir) / "media" / "attachments"
 
 
+def get_attachment_table_name():
+    """Get custom table name from Django settings"""
+    chewy_settings = getattr(settings, "CHEWY_ATTACHMENT", {})
+    return chewy_settings.get("TABLE_NAME", "chewy_attachment_files")
+
+
 class Attachment(models.Model):
     """Attachment model for storing file metadata"""
 
@@ -33,11 +39,18 @@ class Attachment(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
-        db_table = "chewy_attachment_files"
+        # Use db_table property to support dynamic table name
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["owner_id", "created_at"]),
         ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Dynamically set table name
+        if not hasattr(self._meta, '_db_table_set'):
+            self._meta.db_table = get_attachment_table_name()
+            self._meta._db_table_set = True
 
     def __str__(self):
         return f"{self.original_name} ({self.id})"

@@ -201,6 +201,14 @@ MEDIA_URL = '/media/'
 # 最大上传大小 (可选)
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
 
+# ChewyAttachment 配置
+CHEWY_ATTACHMENT = {
+    # 存储根目录
+    "STORAGE_ROOT": BASE_DIR / "media" / "attachments",
+    # 自定义表名 (可选,默认: "chewy_attachment_files")
+    "TABLE_NAME": "my_custom_attachments",
+}
+
 # 自定义权限类 (可选)
 # 如果不配置,则使用默认权限类
 ATTACHMENTS_PERMISSION_CLASSES = [
@@ -253,10 +261,17 @@ ATTACHMENTS_PERMISSION_CLASSES = [
 ### FastAPI 配置
 
 ```python
-# 自定义存储路径
+import os
 from chewy_attachment.core.storage import FileStorage
 
+# 自定义存储路径
 storage = FileStorage(base_path="/custom/path/media")
+
+# 自定义表名 (通过环境变量)
+os.environ["CHEWY_ATTACHMENT_TABLE_NAME"] = "my_custom_attachments"
+
+# 或者在启动应用前设置
+# export CHEWY_ATTACHMENT_TABLE_NAME=my_custom_attachments
 ```
 
 ## 📂 项目结构
