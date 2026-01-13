@@ -1,6 +1,6 @@
 [project]
 name = "chewy-attachment"
-version = "0.1.0"
+version = "0.2.0"
 description = "通用图片/附件管理插件，支持 Django 和 FastAPI"
 readme = "README.md"
 requires-python = ">=3.9"
