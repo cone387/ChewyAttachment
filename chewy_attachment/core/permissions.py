@@ -1,6 +1,7 @@
 """Permission checking logic for ChewyAttachment"""
 
-from typing import Optional
+import importlib
+from typing import Optional, Type
 
 from .schemas import FileMetadata, UserContext
 
@@ -106,3 +107,30 @@ class PermissionChecker:
         if PermissionChecker.can_delete(file, user):
             return None
         return "Only the file owner can delete this file"
+
+
+def load_permission_class(import_path: str) -> Type:
+    """
+    Dynamically load a permission class from import path.
+
+    Args:
+        import_path: Full import path like "myapp.permissions.MyPermissionClass"
+
+    Returns:
+        The permission class
+
+    Raises:
+        ImportError: If module or class cannot be imported
+        AttributeError: If class not found in module
+
+    Example:
+        >>> perm_class = load_permission_class("myapp.permissions.CustomPermission")
+    """
+    try:
+        module_path, class_name = import_path.rsplit(".", 1)
+        module = importlib.import_module(module_path)
+        return getattr(module, class_name)
+    except (ValueError, ImportError, AttributeError) as e:
+        raise ImportError(
+            f"Could not import permission class '{import_path}': {e}"
+        ) from e

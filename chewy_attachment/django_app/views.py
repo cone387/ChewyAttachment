@@ -1,5 +1,6 @@
 """DRF views for ChewyAttachment"""
 
+from django.conf import settings
 from django.http import FileResponse, Http404
 
 from rest_framework import status, viewsets
@@ -7,12 +8,46 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ..core.permissions import PermissionChecker
+from ..core.permissions import PermissionChecker, load_permission_class
 from ..core.storage import FileStorageEngine
 from ..core.utils import generate_uuid
 from .models import Attachment, get_storage_root
 from .permissions import IsAuthenticatedForUpload, IsOwnerOrPublicReadOnly
 from .serializers import AttachmentSerializer, AttachmentUploadSerializer
+
+
+def get_permission_classes():
+    """
+    Get permission classes from settings or use defaults.
+
+    Settings:
+        ATTACHMENTS_PERMISSION_CLASSES: List of permission class paths
+
+    Example:
+        # settings.py
+        ATTACHMENTS_PERMISSION_CLASSES = [
+            "IsAuthenticatedForUpload",
+            "myapp.permissions.CustomAttachmentPermission",
+        ]
+    """
+    custom_classes = getattr(settings, "ATTACHMENTS_PERMISSION_CLASSES", None)
+
+    if custom_classes:
+        loaded_classes = []
+        for class_path in custom_classes:
+            # If it's just a class name, try to load from default location
+            if "." not in class_path:
+                class_path = f"chewy_attachment.django_app.permissions.{class_path}"
+            try:
+                loaded_classes.append(load_permission_class(class_path))
+            except ImportError as e:
+                raise ImportError(
+                    f"Failed to load permission class from ATTACHMENTS_PERMISSION_CLASSES: {e}"
+                )
+        return loaded_classes
+
+    # Default permission classes
+    return [IsAuthenticatedForUpload, IsOwnerOrPublicReadOnly]
 
 
 class AttachmentViewSet(viewsets.ModelViewSet):
@@ -23,12 +58,19 @@ class AttachmentViewSet(viewsets.ModelViewSet):
     - POST /files/ - Upload file
     - GET /files/{id}/ - Get file info
     - DELETE /files/{id}/ - Delete file
+
+    Custom Permissions:
+        Configure via settings.ATTACHMENTS_PERMISSION_CLASSES
     """
 
     queryset = Attachment.objects.all()
     serializer_class = AttachmentSerializer
-    permission_classes = [IsAuthenticatedForUpload, IsOwnerOrPublicReadOnly]
     http_method_names = ["get", "post", "delete", "head", "options"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Dynamically load permission classes
+        self.permission_classes = get_permission_classes()
 
     def get_storage_engine(self) -> FileStorageEngine:
         """Get storage engine instance"""
@@ -112,9 +154,15 @@ class AttachmentDownloadView(APIView):
     Alternative download view using APIView.
 
     GET /files/{id}/content - Download file content
+
+    Custom Permissions:
+        Configure via settings.ATTACHMENTS_PERMISSION_CLASSES
     """
 
-    permission_classes = [IsOwnerOrPublicReadOnly]
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Dynamically load permission classes
+        self.permission_classes = get_permission_classes()
 
     def get_object(self, pk):
         """Get attachment by ID"""

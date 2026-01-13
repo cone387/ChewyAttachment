@@ -81,3 +81,11 @@ REST_FRAMEWORK = {
 CHEWY_ATTACHMENT = {
     "STORAGE_ROOT": BASE_DIR / "media" / "attachments",
 }
+
+# Optional: Custom permission classes for attachments
+# ATTACHMENTS_PERMISSION_CLASSES = [
+#     "chewy_attachment.django_app.permissions.IsAuthenticatedForUpload",
+#     "chewy_attachment.django_app.permissions.IsOwnerOrPublicReadOnly",
+#     # Or use your custom permission class:
+#     # "myapp.permissions.CustomAttachmentPermission",
+# ]

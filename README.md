@@ -186,6 +186,54 @@ MEDIA_URL = '/media/'
 
 # 最大上传大小 (可选)
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
+
+# 自定义权限类 (可选)
+# 如果不配置,则使用默认权限类
+ATTACHMENTS_PERMISSION_CLASSES = [
+    "chewy_attachment.django_app.permissions.IsAuthenticatedForUpload",
+    "chewy_attachment.django_app.permissions.IsOwnerOrPublicReadOnly",
+    # 或使用你的自定义权限类:
+    # "myapp.permissions.CustomAttachmentPermission",
+]
+```
+
+#### 自定义权限类示例
+
+```python
+# myapp/permissions.py
+from rest_framework import permissions
+from chewy_attachment.django_app.models import Attachment
+from chewy_attachment.core.permissions import PermissionChecker
+
+class CustomAttachmentPermission(permissions.BasePermission):
+    """
+    自定义附件权限类
+    
+    示例: 管理员可以访问所有文件,普通用户只能访问自己的文件
+    """
+    
+    def has_object_permission(self, request, view, obj: Attachment):
+        # 管理员拥有所有权限
+        if request.user and request.user.is_staff:
+            return True
+        
+        # 使用核心权限检查器
+        user_context = Attachment.get_user_context(request)
+        file_metadata = obj.to_file_metadata()
+        
+        if request.method in permissions.SAFE_METHODS:
+            return PermissionChecker.can_view(file_metadata, user_context)
+        
+        if request.method == "DELETE":
+            return PermissionChecker.can_delete(file_metadata, user_context)
+        
+        return False
+
+# settings.py
+ATTACHMENTS_PERMISSION_CLASSES = [
+    "chewy_attachment.django_app.permissions.IsAuthenticatedForUpload",
+    "myapp.permissions.CustomAttachmentPermission",
+]
 ```
 
 ### FastAPI 配置
