@@ -1,0 +1,65 @@
+[project]
+name = "chewy-attachment"
+version = "0.1.0"
+description = "通用图片/附件管理插件，支持 Django 和 FastAPI"
+readme = "README.md"
+requires-python = ">=3.13"
+license = {text = "MIT"}
+
+dependencies = [
+    "python-magic>=0.4.27",
+]
+
+[project.optional-dependencies]
+django = [
+    "django>=5.0.0",
+    "djangorestframework>=3.14.0",
+]
+
+fastapi = [
+    "fastapi>=0.109.0",
+    "sqlmodel>=0.0.14",
+    "python-multipart>=0.0.6",
+    "uvicorn>=0.27.0",
+]
+
+test = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.26.0",
+]
+
+test-django = [
+    "chewy-attachment[test]",
+    "chewy-attachment[django]",
+    "pytest-django>=4.7.0",
+]
+
+test-fastapi = [
+    "chewy-attachment[test]",
+    "chewy-attachment[fastapi]",
+]
+
+dev = [
+    "chewy-attachment[django,fastapi,test-django,test-fastapi]",
+    "ruff>=0.1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["chewy_attachment"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.hatch.build.targets.wheel]
+packages = ["chewy_attachment"]
