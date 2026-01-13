@@ -1,5 +1,10 @@
 # ChewyAttachment
 
+[![PyPI version](https://badge.fury.io/py/chewy-attachment.svg)](https://badge.fury.io/py/chewy-attachment)
+[![Python Versions](https://img.shields.io/pypi/pyversions/chewy-attachment.svg)](https://pypi.org/project/chewy-attachment/)
+[![License](https://img.shields.io/pypi/l/chewy-attachment.svg)](https://github.com/cone387/ChewyAttachment/blob/master/LICENSE)
+[![Downloads](https://pepy.tech/badge/chewy-attachment)](https://pepy.tech/project/chewy-attachment)
+
 🚀 通用文件/附件管理服务 - 支持 Django & FastAPI 双框架
 
 ## 📖 简介
@@ -22,6 +27,15 @@ ChewyAttachment 是一个通用的文件/附件管理插件，提供开箱即用
 ```bash
 # 使用 pip 安装
 pip install chewy-attachment
+
+# 安装 Django 支持
+pip install chewy-attachment[django]
+
+# 安装 FastAPI 支持
+pip install chewy-attachment[fastapi]
+
+# 安装全部功能(开发)
+pip install chewy-attachment[dev]
 
 # 或从源码安装
 git clone https://github.com/cone387/ChewyAttachment.git
