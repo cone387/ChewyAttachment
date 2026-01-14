@@ -163,7 +163,7 @@ GET /api/attachments/{attachment_id}/
   "owner_id": "123",
   "is_public": true,
   "created_at": "2026-01-14 10:30:00",
-  "content_url": "http://localhost:8000/api/attachments/files/550e8400-e29b-41d4-a716-446655440000/content/"
+  "preview_url": "http://localhost:8000/api/attachments/files/550e8400-e29b-41d4-a716-446655440000/preview/"
 }
 ```
 

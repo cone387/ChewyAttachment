@@ -15,7 +15,6 @@ def get_datetime_format():
 class AttachmentSerializer(serializers.ModelSerializer):
     """Serializer for Attachment model (read operations)"""
 
-    content_url = serializers.SerializerMethodField()
     preview_url = serializers.SerializerMethodField()
     created_at = serializers.SerializerMethodField()
 
@@ -29,19 +28,9 @@ class AttachmentSerializer(serializers.ModelSerializer):
             "owner_id",
             "is_public",
             "created_at",
-            "content_url",
             "preview_url",
         ]
         read_only_fields = fields
-
-    def get_content_url(self, obj):
-        """Generate content download URL"""
-        request = self.context.get('request')
-        if request:
-            return request.build_absolute_uri(
-                f'/api/attachments/files/{obj.id}/content/'
-            )
-        return f'/api/attachments/files/{obj.id}/content/'
 
     def get_preview_url(self, obj):
         """Generate preview URL (inline display)"""
