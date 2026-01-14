@@ -122,19 +122,35 @@ app.dependency_overrides[get_current_user_id] = custom_get_user_id
 
 ## 📚 API 文档
 
-### 上传文件
+### Django API
+
+#### 上传文件
 
 ```bash
-POST /api/attachments/
+POST /api/attachments/files/
 Content-Type: multipart/form-data
 
 参数:
-- file: 文件对象
-- is_public: boolean (可选，默认 true)
-- description: string (可选)
+- file: 文件对象 (必须)
+- is_public: boolean (可选, 默认: false)
+- owner_id: string (可选, 由认证系统自动填充)
 ```
 
-### 获取文件列表
+**返回示例:**
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "original_name": "example.jpg",
+  "mime_type": "image/jpeg",
+  "size": 102400,
+  "owner_id": "123",
+  "is_public": false,
+  "created_at": "2026-01-14 10:30:00",
+  "preview_url": "http://localhost:8000/api/attachments/files/550e8400-e29b-41d4-a716-446655440000/preview/"
+}
+```
+
+#### 获取文件列表
 
 ```bash
 GET /api/attachments/files/
@@ -165,10 +181,10 @@ GET /api/attachments/files/
 }
 ```
 
-### 获取文件详情
+#### 获取文件详情
 
 ```bash
-GET /api/attachments/{attachment_id}/
+GET /api/attachments/files/{attachment_id}/
 ```
 
 **返回示例:**
@@ -185,16 +201,94 @@ GET /api/attachments/{attachment_id}/
 }
 ```
 
-### 下载文件
+#### 预览文件
 
 ```bash
-GET /api/attachments/{attachment_id}/download/
+GET /api/attachments/files/{attachment_id}/preview/
 ```
 
-### 删除文件
+在浏览器中直接预览文件（inline 模式），图片会直接显示。
+
+#### 下载文件
 
 ```bash
-DELETE /api/attachments/{attachment_id}/
+GET /api/attachments/files/{attachment_id}/content/
+```
+
+强制下载文件（attachment 模式）。
+
+#### 删除文件
+
+```bash
+DELETE /api/attachments/files/{attachment_id}/
+```
+
+### FastAPI API
+
+#### 上传文件
+
+```bash
+POST /api/attachments/files/
+Content-Type: multipart/form-data
+
+参数:
+- file: 文件对象 (必须)
+- is_public: boolean (可选, 默认: false)
+```
+
+#### 获取文件列表
+
+```bash
+GET /api/attachments/files/
+
+查询参数:
+- page: 页码 (默认: 1)
+- page_size: 每页数量 (默认: 20, 最大: 100)
+```
+
+**返回示例:**
+```json
+{
+  "total": 100,
+  "page": 1,
+  "page_size": 20,
+  "items": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "original_name": "example.jpg",
+      "mime_type": "image/jpeg",
+      "size": 102400,
+      "owner_id": "123",
+      "is_public": true,
+      "created_at": "2026-01-14T10:30:00",
+      "preview_url": "http://localhost:8000/api/attachments/files/550e8400-e29b-41d4-a716-446655440000/preview"
+    }
+  ]
+}
+```
+
+#### 获取文件详情
+
+```bash
+GET /api/attachments/files/{attachment_id}
+```
+
+#### 预览文件
+
+```bash
+GET /api/attachments/files/{attachment_id}/preview
+```
+
+#### 下载文件
+
+```bash
+GET /api/attachments/files/{attachment_id}/content
+```
+
+#### 删除文件
+
+```bash
+DELETE /api/attachments/files/{attachment_id}
 ```
 
 ## 🔐 权限模型
@@ -207,16 +301,14 @@ DELETE /api/attachments/{attachment_id}/
 
 ```python
 class Attachment:
-    id: int
-    filename: str          # 原始文件名
-    file_path: str         # 物理存储路径
-    file_size: int         # 文件大小(字节)
-    content_type: str      # MIME 类型
-    owner_id: int          # 所有者 ID
+    id: str                # UUID 主键
+    original_name: str     # 原始文件名
+    storage_path: str      # 物理存储路径
+    mime_type: str         # MIME 类型
+    size: int              # 文件大小(字节)
+    owner_id: str          # 所有者 ID
     is_public: bool        # 访问级别
-    description: str       # 描述信息
     created_at: datetime   # 创建时间
-    updated_at: datetime   # 更新时间
 ```
 
 ## 🛠️ 配置选项
