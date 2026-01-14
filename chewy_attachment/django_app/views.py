@@ -5,6 +5,7 @@ from django.http import FileResponse, Http404
 
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -54,6 +55,13 @@ def get_permission_classes():
     return [IsAuthenticatedForUpload, IsOwnerOrPublicReadOnly]
 
 
+class AttachmentPagination(PageNumberPagination):
+    """Custom pagination for attachments"""
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
 class AttachmentViewSet(viewsets.ModelViewSet):
     """
     ViewSet for attachment operations.
@@ -69,6 +77,7 @@ class AttachmentViewSet(viewsets.ModelViewSet):
 
     queryset = Attachment.objects.all()
     serializer_class = AttachmentSerializer
+    pagination_class = AttachmentPagination
     http_method_names = ["get", "post", "delete", "head", "options"]
 
     def __init__(self, *args, **kwargs):

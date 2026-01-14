@@ -137,13 +137,32 @@ Content-Type: multipart/form-data
 ### 获取文件列表
 
 ```bash
-GET /api/attachments/
+GET /api/attachments/files/
 
 查询参数:
-- owner_id: int (可选)
-- is_public: boolean (可选)
-- skip: int (可选，分页偏移)
-- limit: int (可选，每页数量)
+- page: 页码 (默认: 1)
+- page_size: 每页数量 (默认: 20, 最大: 100)
+```
+
+**返回示例:**
+```json
+{
+  "count": 100,
+  "next": "http://localhost:8000/api/attachments/files/?page=2",
+  "previous": null,
+  "results": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "original_name": "example.jpg",
+      "mime_type": "image/jpeg",
+      "size": 102400,
+      "owner_id": "123",
+      "is_public": true,
+      "created_at": "2026-01-14 10:30:00",
+      "preview_url": "http://localhost:8000/api/attachments/files/550e8400-e29b-41d4-a716-446655440000/preview/"
+    }
+  ]
+}
 ```
 
 ### 获取文件详情
