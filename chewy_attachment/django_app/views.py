@@ -76,6 +76,20 @@ class AttachmentViewSet(viewsets.ModelViewSet):
         # Dynamically load permission classes
         self.permission_classes = get_permission_classes()
 
+    def get_queryset(self):
+        """Filter queryset based on user permissions"""
+        user = self.request.user
+        
+        # Anonymous users: only public files
+        if not user.is_authenticated:
+            return Attachment.objects.filter(is_public=True)
+        
+        # Authenticated users: own files + public files
+        from django.db.models import Q
+        return Attachment.objects.filter(
+            Q(owner_id=str(user.id)) | Q(is_public=True)
+        )
+
     def get_storage_engine(self) -> FileStorageEngine:
         """Get storage engine instance"""
         return FileStorageEngine(get_storage_root())
@@ -104,13 +118,13 @@ class AttachmentViewSet(viewsets.ModelViewSet):
             is_public=is_public,
         )
 
-        output_serializer = AttachmentSerializer(attachment)
+        output_serializer = AttachmentSerializer(attachment, context={'request': request})
         return Response(output_serializer.data, status=status.HTTP_201_CREATED)
 
     def retrieve(self, request, *args, **kwargs):
         """Get file metadata"""
         instance = self.get_object()
-        serializer = self.get_serializer(instance)
+        serializer = self.get_serializer(instance, context={'request': request})
         return Response(serializer.data)
 
     def destroy(self, request, *args, **kwargs):

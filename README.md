@@ -153,6 +153,20 @@ GET /api/attachments/
 GET /api/attachments/{attachment_id}/
 ```
 
+**返回示例:**
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "original_name": "example.jpg",
+  "mime_type": "image/jpeg",
+  "size": 102400,
+  "owner_id": "123",
+  "is_public": true,
+  "created_at": "2026-01-14 10:30:00",
+  "content_url": "http://localhost:8000/api/attachments/files/550e8400-e29b-41d4-a716-446655440000/content/"
+}
+```
+
 ### 下载文件
 
 ```bash
@@ -205,8 +219,13 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
 CHEWY_ATTACHMENT = {
     # 存储根目录
     "STORAGE_ROOT": BASE_DIR / "media" / "attachments",
+    
     # 自定义表名 (可选, 默认: "chewy_attachment_files")
     # "TABLE_NAME": "my_custom_attachments",
+    
+    # 时间格式 (可选, 默认: "%Y-%m-%d %H:%M:%S")
+    "DATETIME_FORMAT": "%Y-%m-%d %H:%M:%S",
+    
     # 自定义权限类 (可选)
     # "PERMISSION_CLASSES": [
     #     "chewy_attachment.django_app.permissions.IsAuthenticatedForUpload",
