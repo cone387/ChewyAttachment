@@ -166,6 +166,35 @@ class AttachmentViewSet(viewsets.ModelViewSet):
         response["Content-Length"] = instance.size
         return response
 
+    @action(detail=True, methods=["get"], url_path="preview")
+    def preview(self, request, pk=None):
+        """Preview file in browser (inline display)"""
+        instance = self.get_object()
+
+        user_context = Attachment.get_user_context(request)
+        file_metadata = instance.to_file_metadata()
+
+        if not PermissionChecker.can_download(file_metadata, user_context):
+            return Response(
+                {"detail": "You do not have permission to preview this file"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        storage = self.get_storage_engine()
+
+        try:
+            file_path = storage.get_file_path(instance.storage_path)
+        except Exception:
+            raise Http404("File not found on storage")
+
+        response = FileResponse(
+            open(file_path, "rb"),
+            content_type=instance.mime_type,
+        )
+        response["Content-Disposition"] = f'inline; filename="{instance.original_name}"'
+        response["Content-Length"] = instance.size
+        return response
+
 
 class AttachmentDownloadView(APIView):
     """
