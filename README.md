@@ -56,9 +56,10 @@ INSTALLED_APPS = [
     'chewy_attachment.django_app',
 ]
 
-# 配置文件存储
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+# ChewyAttachment 配置
+CHEWY_ATTACHMENT = {
+    "STORAGE_ROOT": BASE_DIR / "media" / "attachments",
+}
 ```
 
 2. **配置 URL**
@@ -66,13 +67,11 @@ MEDIA_ROOT = BASE_DIR / 'media'
 ```python
 # urls.py
 from django.urls import path, include
-from django.conf import settings
-from django.conf.urls.static import static
 
 urlpatterns = [
     # ...
     path('api/attachments/', include('chewy_attachment.django_app.urls')),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+]
 ```
 
 3. **运行迁移**
@@ -208,23 +207,16 @@ class Attachment:
 ```python
 # settings.py
 
-# 文件存储路径
-MEDIA_ROOT = BASE_DIR / 'media'
-MEDIA_URL = '/media/'
-
-# 最大上传大小 (可选)
-DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
-
 # ChewyAttachment 配置
 CHEWY_ATTACHMENT = {
-    # 存储根目录
+    # 存储根目录 (必须)
     "STORAGE_ROOT": BASE_DIR / "media" / "attachments",
     
     # 自定义表名 (可选, 默认: "chewy_attachment_files")
     # "TABLE_NAME": "my_custom_attachments",
     
     # 时间格式 (可选, 默认: "%Y-%m-%d %H:%M:%S")
-    "DATETIME_FORMAT": "%Y-%m-%d %H:%M:%S",
+    # "DATETIME_FORMAT": "%Y-%m-%d %H:%M:%S",
     
     # 自定义权限类 (可选)
     # "PERMISSION_CLASSES": [
@@ -233,6 +225,13 @@ CHEWY_ATTACHMENT = {
     # ],
 }
 ```
+
+**配置说明：**
+
+- `STORAGE_ROOT`: 文件存储的物理路径（必须配置）
+- `TABLE_NAME`: 数据库表名，默认 `chewy_attachment_files`
+- `DATETIME_FORMAT`: API 返回的时间字段格式
+- `PERMISSION_CLASSES`: 自定义 DRF 权限类列表
 
 #### 自定义权限类示例
 
