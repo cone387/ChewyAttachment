@@ -112,6 +112,21 @@ def get_current_user_required(
     return user
 
 
+def get_current_user_optional(
+    user: UserContext = Depends(get_current_user),
+) -> Optional[UserContext]:
+    """
+    Get current user, allowing anonymous access.
+
+    Args:
+        user: User context from get_current_user
+
+    Returns:
+        UserContext instance or None if anonymous
+    """
+    return user if user.is_authenticated else None
+
+
 def get_attachment_or_404(
     attachment_id: str,
     session: Session = Depends(get_session),

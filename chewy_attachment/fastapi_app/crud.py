@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func, or_
 
 from ..core.utils import generate_uuid
 from .models import Attachment, AttachmentCreate
@@ -75,6 +75,51 @@ def get_attachments_by_owner(
         .order_by(Attachment.created_at.desc())
     )
     return list(session.exec(statement).all())
+
+
+def get_attachments_for_user(
+    session: Session,
+    user_id: Optional[str],
+    page: int = 1,
+    page_size: int = 20,
+) -> tuple[list[Attachment], int]:
+    """
+    Get attachments visible to user with pagination.
+
+    Args:
+        session: Database session
+        user_id: User ID (None for anonymous)
+        page: Page number (1-indexed)
+        page_size: Items per page
+
+    Returns:
+        Tuple of (attachments list, total count)
+    """
+    # Build query based on user permissions
+    if user_id:
+        # Authenticated: own files + public files
+        query = select(Attachment).where(
+            or_(Attachment.owner_id == user_id, Attachment.is_public == True)
+        )
+        count_query = select(func.count(Attachment.id)).where(
+            or_(Attachment.owner_id == user_id, Attachment.is_public == True)
+        )
+    else:
+        # Anonymous: only public files
+        query = select(Attachment).where(Attachment.is_public == True)
+        count_query = select(func.count(Attachment.id)).where(
+            Attachment.is_public == True
+        )
+
+    # Get total count
+    total = session.exec(count_query).one()
+
+    # Apply pagination
+    query = query.order_by(Attachment.created_at.desc())
+    query = query.offset((page - 1) * page_size).limit(page_size)
+
+    attachments = list(session.exec(query).all())
+    return attachments, total
 
 
 def delete_attachment(session: Session, attachment: Attachment) -> bool:

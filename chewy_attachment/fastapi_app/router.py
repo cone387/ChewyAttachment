@@ -1,6 +1,8 @@
 """FastAPI router for ChewyAttachment"""
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlmodel import Session
 
@@ -8,6 +10,7 @@ from ..core.schemas import UserContext
 from ..core.storage import FileStorageEngine
 from . import crud
 from .dependencies import (
+    get_current_user_optional,
     get_current_user_required,
     get_session,
     get_storage_engine,
@@ -15,9 +18,51 @@ from .dependencies import (
     require_view_permission,
 )
 from .models import Attachment, AttachmentCreate
-from .schemas import AttachmentResponse, ErrorResponse
+from .schemas import AttachmentListResponse, AttachmentResponse, ErrorResponse
 
 router = APIRouter(prefix="/files", tags=["attachments"])
+
+
+def _add_preview_url(attachment: Attachment, request: Request) -> AttachmentResponse:
+    """Add preview_url to attachment response"""
+    response = AttachmentResponse.model_validate(attachment)
+    base_url = str(request.base_url).rstrip("/")
+    response.preview_url = f"{base_url}/api/attachments/files/{attachment.id}/preview"
+    return response
+
+
+@router.get(
+    "",
+    response_model=AttachmentListResponse,
+    responses={
+        200: {"description": "List of attachments"},
+    },
+)
+async def list_files(
+    request: Request,
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    session: Session = Depends(get_session),
+    user: Optional[UserContext] = Depends(get_current_user_optional),
+):
+    """
+    List files with pagination.
+
+    - Anonymous users: only public files
+    - Authenticated users: own files + public files
+    """
+    user_id = user.user_id if user else None
+    attachments, total = crud.get_attachments_for_user(session, user_id, page, page_size)
+
+    # Add preview_url to each attachment
+    items = [_add_preview_url(att, request) for att in attachments]
+
+    return AttachmentListResponse(
+        total=total,
+        page=page,
+        page_size=page_size,
+        items=items,
+    )
 
 
 @router.post(
@@ -29,6 +74,7 @@ router = APIRouter(prefix="/files", tags=["attachments"])
     },
 )
 async def upload_file(
+    request: Request,
     file: UploadFile = File(...),
     is_public: bool = Form(default=False),
     session: Session = Depends(get_session),
@@ -56,7 +102,7 @@ async def upload_file(
     )
 
     attachment = crud.create_attachment(session, attachment_data)
-    return attachment
+    return _add_preview_url(attachment, request)
 
 
 @router.get(
@@ -68,6 +114,7 @@ async def upload_file(
     },
 )
 async def get_file_info(
+    request: Request,
     attachment: Attachment = Depends(require_view_permission),
 ):
     """
@@ -75,7 +122,7 @@ async def get_file_info(
 
     - **attachment_id**: UUID of the attachment
     """
-    return attachment
+    return _add_preview_url(attachment, request)
 
 
 @router.get(
@@ -90,7 +137,7 @@ async def download_file(
     storage: FileStorageEngine = Depends(get_storage_engine),
 ):
     """
-    Download file content.
+    Download file content (attachment mode - triggers download).
 
     - **attachment_id**: UUID of the attachment
     """
@@ -106,6 +153,39 @@ async def download_file(
         path=file_path,
         media_type=attachment.mime_type,
         filename=attachment.original_name,
+        headers={"Content-Disposition": f'attachment; filename="{attachment.original_name}"'},
+    )
+
+
+@router.get(
+    "/{attachment_id}/preview",
+    responses={
+        403: {"model": ErrorResponse, "description": "Permission denied"},
+        404: {"model": ErrorResponse, "description": "Attachment not found"},
+    },
+)
+async def preview_file(
+    attachment: Attachment = Depends(require_view_permission),
+    storage: FileStorageEngine = Depends(get_storage_engine),
+):
+    """
+    Preview file in browser (inline mode - displays in browser).
+
+    - **attachment_id**: UUID of the attachment
+    """
+    try:
+        file_path = storage.get_file_path(attachment.storage_path)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found on storage",
+        )
+
+    return FileResponse(
+        path=file_path,
+        media_type=attachment.mime_type,
+        filename=attachment.original_name,
+        headers={"Content-Disposition": f'inline; filename="{attachment.original_name}"'},
     )
 
 
