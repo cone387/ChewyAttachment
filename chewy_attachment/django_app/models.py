@@ -29,28 +29,53 @@ def get_attachment_table_name():
 class Attachment(models.Model):
     """Attachment model for storing file metadata"""
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    original_name = models.CharField(max_length=255)
-    storage_path = models.CharField(max_length=500)
-    mime_type = models.CharField(max_length=100)
-    size = models.BigIntegerField()
-    owner_id = models.CharField(max_length=100, db_index=True)
-    is_public = models.BooleanField(default=False, db_index=True)
-    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        verbose_name="ID",
+    )
+    original_name = models.CharField(
+        max_length=255,
+        verbose_name="文件名",
+    )
+    storage_path = models.CharField(
+        max_length=500,
+        verbose_name="存储路径",
+    )
+    mime_type = models.CharField(
+        max_length=100,
+        verbose_name="文件类型",
+    )
+    size = models.BigIntegerField(
+        verbose_name="文件大小",
+        help_text="单位：字节",
+    )
+    owner_id = models.CharField(
+        max_length=100,
+        db_index=True,
+        verbose_name="所有者ID",
+    )
+    is_public = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name="公开访问",
+        help_text="公开文件可被任何人访问",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name="创建时间",
+    )
 
     class Meta:
-        # Use db_table property to support dynamic table name
+        db_table = "chewy_attachment_files"
         ordering = ["-created_at"]
+        verbose_name = "附件"
+        verbose_name_plural = "附件"
         indexes = [
             models.Index(fields=["owner_id", "created_at"]),
         ]
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Dynamically set table name
-        if not hasattr(self._meta, '_db_table_set'):
-            self._meta.db_table = get_attachment_table_name()
-            self._meta._db_table_set = True
 
     def __str__(self):
         return f"{self.original_name} ({self.id})"

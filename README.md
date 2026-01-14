@@ -205,18 +205,14 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
 CHEWY_ATTACHMENT = {
     # 存储根目录
     "STORAGE_ROOT": BASE_DIR / "media" / "attachments",
-    # 自定义表名 (可选,默认: "chewy_attachment_files")
-    "TABLE_NAME": "my_custom_attachments",
+    # 自定义表名 (可选, 默认: "chewy_attachment_files")
+    # "TABLE_NAME": "my_custom_attachments",
+    # 自定义权限类 (可选)
+    # "PERMISSION_CLASSES": [
+    #     "chewy_attachment.django_app.permissions.IsAuthenticatedForUpload",
+    #     "chewy_attachment.django_app.permissions.IsOwnerOrPublicReadOnly",
+    # ],
 }
-
-# 自定义权限类 (可选)
-# 如果不配置,则使用默认权限类
-ATTACHMENTS_PERMISSION_CLASSES = [
-    "chewy_attachment.django_app.permissions.IsAuthenticatedForUpload",
-    "chewy_attachment.django_app.permissions.IsOwnerOrPublicReadOnly",
-    # 或使用你的自定义权限类:
-    # "myapp.permissions.CustomAttachmentPermission",
-]
 ```
 
 #### 自定义权限类示例
@@ -252,26 +248,22 @@ class CustomAttachmentPermission(permissions.BasePermission):
         return False
 
 # settings.py
-ATTACHMENTS_PERMISSION_CLASSES = [
-    "chewy_attachment.django_app.permissions.IsAuthenticatedForUpload",
-    "myapp.permissions.CustomAttachmentPermission",
-]
+CHEWY_ATTACHMENT = {
+    "STORAGE_ROOT": BASE_DIR / "media" / "attachments",
+    "PERMISSION_CLASSES": [
+        "chewy_attachment.django_app.permissions.IsAuthenticatedForUpload",
+        "myapp.permissions.CustomAttachmentPermission",
+    ],
+}
 ```
 
 ### FastAPI 配置
 
 ```python
-import os
 from chewy_attachment.core.storage import FileStorage
 
 # 自定义存储路径
 storage = FileStorage(base_path="/custom/path/media")
-
-# 自定义表名 (通过环境变量)
-os.environ["CHEWY_ATTACHMENT_TABLE_NAME"] = "my_custom_attachments"
-
-# 或者在启动应用前设置
-# export CHEWY_ATTACHMENT_TABLE_NAME=my_custom_attachments
 ```
 
 ## 📂 项目结构
@@ -319,6 +311,52 @@ pytest chewy_attachment/fastapi_app/tests/
 
 - [Django 示例](examples/django_example/)
 - [FastAPI 示例](examples/fastapi_example/)
+
+### 运行 Django 示例
+
+```bash
+# 克隆项目（如果还没有）
+git clone https://github.com/cone387/ChewyAttachment.git
+cd ChewyAttachment
+
+# 使用 uv 安装依赖（会自动创建 .venv 虚拟环境）
+uv sync
+
+# 进入 Django 示例目录
+cd examples/django_example
+
+# 运行迁移
+uv run python manage.py migrate
+
+# 创建超级用户（可选）
+uv run python manage.py createsuperuser
+
+# 启动开发服务器
+uv run python manage.py runserver
+
+# 访问
+# - API: http://localhost:8000/api/attachments/
+# - Admin: http://localhost:8000/admin/
+```
+
+### 运行 FastAPI 示例
+
+```bash
+# 克隆项目（如果还没有）
+git clone https://github.com/cone387/ChewyAttachment.git
+cd ChewyAttachment
+
+# 使用 uv 安装依赖（会自动创建 .venv 虚拟环境）
+uv sync
+
+# 启动 FastAPI 应用
+uv run python examples/fastapi_example/main.py
+
+# 访问
+# - API: http://localhost:8000/api/attachments/
+# - Docs: http://localhost:8000/docs
+# - ReDoc: http://localhost:8000/redoc
+```
 
 ## 🤝 贡献
 

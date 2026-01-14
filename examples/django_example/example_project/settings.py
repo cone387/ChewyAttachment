@@ -82,12 +82,9 @@ CHEWY_ATTACHMENT = {
     "STORAGE_ROOT": BASE_DIR / "media" / "attachments",
     # Optional: Custom table name (default: "chewy_attachment_files")
     # "TABLE_NAME": "my_custom_attachments",
+    # Optional: Custom permission classes
+    # "PERMISSION_CLASSES": [
+    #     "chewy_attachment.django_app.permissions.IsAuthenticatedForUpload",
+    #     "chewy_attachment.django_app.permissions.IsOwnerOrPublicReadOnly",
+    # ],
 }
-
-# Optional: Custom permission classes for attachments
-# ATTACHMENTS_PERMISSION_CLASSES = [
-#     "chewy_attachment.django_app.permissions.IsAuthenticatedForUpload",
-#     "chewy_attachment.django_app.permissions.IsOwnerOrPublicReadOnly",
-#     # Or use your custom permission class:
-#     # "myapp.permissions.CustomAttachmentPermission",
-# ]

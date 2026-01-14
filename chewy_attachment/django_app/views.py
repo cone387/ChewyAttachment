@@ -21,16 +21,20 @@ def get_permission_classes():
     Get permission classes from settings or use defaults.
 
     Settings:
-        ATTACHMENTS_PERMISSION_CLASSES: List of permission class paths
+        CHEWY_ATTACHMENT["PERMISSION_CLASSES"]: List of permission class paths
 
     Example:
         # settings.py
-        ATTACHMENTS_PERMISSION_CLASSES = [
-            "IsAuthenticatedForUpload",
-            "myapp.permissions.CustomAttachmentPermission",
-        ]
+        CHEWY_ATTACHMENT = {
+            "STORAGE_ROOT": BASE_DIR / "media" / "attachments",
+            "PERMISSION_CLASSES": [
+                "IsAuthenticatedForUpload",
+                "myapp.permissions.CustomAttachmentPermission",
+            ],
+        }
     """
-    custom_classes = getattr(settings, "ATTACHMENTS_PERMISSION_CLASSES", None)
+    chewy_settings = getattr(settings, "CHEWY_ATTACHMENT", {})
+    custom_classes = chewy_settings.get("PERMISSION_CLASSES")
 
     if custom_classes:
         loaded_classes = []
@@ -42,7 +46,7 @@ def get_permission_classes():
                 loaded_classes.append(load_permission_class(class_path))
             except ImportError as e:
                 raise ImportError(
-                    f"Failed to load permission class from ATTACHMENTS_PERMISSION_CLASSES: {e}"
+                    f"Failed to load permission class from CHEWY_ATTACHMENT['PERMISSION_CLASSES']: {e}"
                 )
         return loaded_classes
 
@@ -60,7 +64,7 @@ class AttachmentViewSet(viewsets.ModelViewSet):
     - DELETE /files/{id}/ - Delete file
 
     Custom Permissions:
-        Configure via settings.ATTACHMENTS_PERMISSION_CLASSES
+        Configure via CHEWY_ATTACHMENT["PERMISSION_CLASSES"]
     """
 
     queryset = Attachment.objects.all()
@@ -156,7 +160,7 @@ class AttachmentDownloadView(APIView):
     GET /files/{id}/content - Download file content
 
     Custom Permissions:
-        Configure via settings.ATTACHMENTS_PERMISSION_CLASSES
+        Configure via CHEWY_ATTACHMENT["PERMISSION_CLASSES"]
     """
 
     def __init__(self, *args, **kwargs):
