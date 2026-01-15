@@ -33,12 +33,7 @@ class AttachmentSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_preview_url(self, obj):
-        """Generate preview URL (inline display)"""
-        request = self.context.get('request')
-        if request:
-            return request.build_absolute_uri(
-                f'/api/attachments/files/{obj.id}/preview/'
-            )
+        """Generate preview URL path (relative path for flexibility)"""
         return f'/api/attachments/files/{obj.id}/preview/'
 
     def get_created_at(self, obj):
