@@ -24,9 +24,11 @@ router = APIRouter(prefix="/files", tags=["attachments"])
 
 
 def _add_preview_url(attachment: Attachment, request: Request) -> AttachmentResponse:
-    """Add preview_url to attachment response (relative path for flexibility)"""
+    """Add preview_url to attachment response dynamically based on router configuration"""
     response = AttachmentResponse.model_validate(attachment)
-    response.preview_url = f"/api/attachments/files/{attachment.id}/preview"
+    # Use url_for to generate URL based on actual route config, then extract path
+    full_url = request.url_for("preview_file", attachment_id=attachment.id)
+    response.preview_url = full_url.path
     return response
 
 

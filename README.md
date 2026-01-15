@@ -146,9 +146,11 @@ Content-Type: multipart/form-data
   "owner_id": "123",
   "is_public": false,
   "created_at": "2026-01-14 10:30:00",
-  "preview_url": "http://localhost:8000/api/attachments/files/550e8400-e29b-41d4-a716-446655440000/preview/"
+  "preview_url": "/api/attachments/files/550e8400-e29b-41d4-a716-446655440000/preview/"
 }
 ```
+
+> **注意**: `preview_url` 返回相对路径，根据实际路由配置动态生成。
 
 #### 获取文件列表
 
@@ -175,7 +177,7 @@ GET /api/attachments/files/
       "owner_id": "123",
       "is_public": true,
       "created_at": "2026-01-14 10:30:00",
-      "preview_url": "http://localhost:8000/api/attachments/files/550e8400-e29b-41d4-a716-446655440000/preview/"
+      "preview_url": "/api/attachments/files/550e8400-e29b-41d4-a716-446655440000/preview/"
     }
   ]
 }
@@ -197,7 +199,7 @@ GET /api/attachments/files/{attachment_id}/
   "owner_id": "123",
   "is_public": true,
   "created_at": "2026-01-14 10:30:00",
-  "preview_url": "http://localhost:8000/api/attachments/files/550e8400-e29b-41d4-a716-446655440000/preview/"
+  "preview_url": "/api/attachments/files/550e8400-e29b-41d4-a716-446655440000/preview/"
 }
 ```
 
@@ -261,7 +263,7 @@ GET /api/attachments/files/
       "owner_id": "123",
       "is_public": true,
       "created_at": "2026-01-14T10:30:00",
-      "preview_url": "http://localhost:8000/api/attachments/files/550e8400-e29b-41d4-a716-446655440000/preview"
+      "preview_url": "/api/attachments/files/550e8400-e29b-41d4-a716-446655440000/preview"
     }
   ]
 }

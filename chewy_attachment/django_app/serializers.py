@@ -2,6 +2,7 @@
 
 from django.conf import settings
 from rest_framework import serializers
+from rest_framework.reverse import reverse
 
 from .models import Attachment
 
@@ -33,8 +34,9 @@ class AttachmentSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_preview_url(self, obj):
-        """Generate preview URL path (relative path for flexibility)"""
-        return f'/api/attachments/files/{obj.id}/preview/'
+        """Generate preview URL path dynamically based on router configuration"""
+        # Use reverse to generate URL based on actual route config
+        return reverse('attachment-preview', kwargs={'pk': obj.id})
 
     def get_created_at(self, obj):
         """Format created_at with configured format"""
