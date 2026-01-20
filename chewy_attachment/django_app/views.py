@@ -82,7 +82,7 @@ class AttachmentViewSet(viewsets.ModelViewSet):
 
     def get_attachment_model(self):
         """获取当前活跃的 Attachment 模型（支持模型交换）"""
-        return apps.get_model('chewy_attachment.django_app', 'Attachment')
+        return apps.get_model('chewy_attachment_django_app', 'Attachment')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -228,7 +228,7 @@ class AttachmentDownloadView(APIView):
 
     def get_attachment_model(self):
         """获取当前活跃的 Attachment 模型（支持模型交换）"""
-        return apps.get_model('chewy_attachment.django_app', 'Attachment')
+        return apps.get_model('chewy_attachment_django_app', 'Attachment')
 
     def get_object(self, pk):
         """Get attachment by ID"""

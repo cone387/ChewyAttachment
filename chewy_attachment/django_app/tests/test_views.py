@@ -62,7 +62,7 @@ class TestAttachmentViews(TestCase):
         file.name = self.test_file_name
 
         response = self.client.post(
-            "/files/",
+            "/api/attachments/files/",
             {"file": file, "is_public": is_public},
             format="multipart",
         )
@@ -75,7 +75,7 @@ class TestAttachmentViews(TestCase):
         file.name = self.test_file_name
 
         response = self.client.post(
-            "/files/",
+            "/api/attachments/files/",
             {"file": file, "is_public": False},
             format="multipart",
         )
@@ -96,7 +96,7 @@ class TestAttachmentViews(TestCase):
         file.name = self.test_file_name
 
         response = self.client.post(
-            "/files/",
+            "/api/attachments/files/",
             {"file": file},
             format="multipart",
         )
@@ -109,7 +109,7 @@ class TestAttachmentViews(TestCase):
         file_id = upload_response.data["id"]
 
         self.client.force_authenticate(user=self.user1)
-        response = self.client.get(f"/files/{file_id}/")
+        response = self.client.get(f"/api/attachments/files/{file_id}/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["id"], file_id)
@@ -120,9 +120,10 @@ class TestAttachmentViews(TestCase):
         file_id = upload_response.data["id"]
 
         self.client.force_authenticate(user=self.user2)
-        response = self.client.get(f"/files/{file_id}/")
+        response = self.client.get(f"/api/attachments/files/{file_id}/")
 
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        # Private files return 404 to non-owners to avoid leaking file existence
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_get_public_file_info_anonymous(self):
         """Test anonymous user can get public file info"""
@@ -130,7 +131,7 @@ class TestAttachmentViews(TestCase):
         file_id = upload_response.data["id"]
 
         self.client.force_authenticate(user=None)
-        response = self.client.get(f"/files/{file_id}/")
+        response = self.client.get(f"/api/attachments/files/{file_id}/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["id"], file_id)
@@ -141,7 +142,7 @@ class TestAttachmentViews(TestCase):
         file_id = upload_response.data["id"]
 
         self.client.force_authenticate(user=self.user1)
-        response = self.client.delete(f"/files/{file_id}/")
+        response = self.client.delete(f"/api/attachments/files/{file_id}/")
 
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(Attachment.objects.count(), 0)
@@ -152,9 +153,10 @@ class TestAttachmentViews(TestCase):
         file_id = upload_response.data["id"]
 
         self.client.force_authenticate(user=self.user2)
-        response = self.client.delete(f"/files/{file_id}/")
+        response = self.client.delete(f"/api/attachments/files/{file_id}/")
 
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        # Private files return 404 to non-owners to avoid leaking file existence
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(Attachment.objects.count(), 1)
 
     def test_delete_public_file_by_non_owner_fails(self):
@@ -163,7 +165,7 @@ class TestAttachmentViews(TestCase):
         file_id = upload_response.data["id"]
 
         self.client.force_authenticate(user=self.user2)
-        response = self.client.delete(f"/files/{file_id}/")
+        response = self.client.delete(f"/api/attachments/files/{file_id}/")
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -173,7 +175,7 @@ class TestAttachmentViews(TestCase):
         file_id = upload_response.data["id"]
 
         self.client.force_authenticate(user=self.user1)
-        response = self.client.get(f"/files/{file_id}/content/")
+        response = self.client.get(f"/api/attachments/files/{file_id}/content/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(b"".join(response.streaming_content), self.test_file_content)
@@ -184,9 +186,10 @@ class TestAttachmentViews(TestCase):
         file_id = upload_response.data["id"]
 
         self.client.force_authenticate(user=self.user2)
-        response = self.client.get(f"/files/{file_id}/content/")
+        response = self.client.get(f"/api/attachments/files/{file_id}/content/")
 
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        # Private files return 404 to non-owners to avoid leaking file existence
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_download_public_file_anonymous(self):
         """Test anonymous user can download public file"""
@@ -194,7 +197,7 @@ class TestAttachmentViews(TestCase):
         file_id = upload_response.data["id"]
 
         self.client.force_authenticate(user=None)
-        response = self.client.get(f"/files/{file_id}/content/")
+        response = self.client.get(f"/api/attachments/files/{file_id}/content/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(b"".join(response.streaming_content), self.test_file_content)
@@ -202,6 +205,6 @@ class TestAttachmentViews(TestCase):
     def test_get_nonexistent_file_returns_404(self):
         """Test 404 for nonexistent file"""
         self.client.force_authenticate(user=self.user1)
-        response = self.client.get("/files/00000000-0000-0000-0000-000000000000/")
+        response = self.client.get("/api/attachments/files/00000000-0000-0000-0000-000000000000/")
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

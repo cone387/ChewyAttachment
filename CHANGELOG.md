@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-01-20
+
+### Fixed
+- Fixed Django app label configuration issue
+- Added explicit `label = "chewy_attachment_django_app"` in AppConfig to avoid conflicts
+- Corrected `apps.get_model()` calls to use proper app label instead of module path
+- Removed unnecessary `requests` dependency from core dependencies
+- Regenerated clean migration files with correct app label references
+
+### Changed
+- Django app now uses explicit app label `chewy_attachment_django_app` instead of auto-generated `django_app`
+- Cleaned up dependencies: `requests` moved out of core dependencies (was only needed for testing)
+- Migration files regenerated for consistency and proper app label usage
+
+### Tested
+- All 12 Django unit tests passing
+- Complete API functionality verified (upload, download, delete, permissions)
+- Anonymous and authenticated user access patterns validated
+
 ## [0.4.1] - 2026-01-20
 
 ### Fixed
