@@ -14,11 +14,13 @@ ChewyAttachment 是一个通用的文件/附件管理插件，提供开箱即用
 ## ✨ 核心特性
 
 - 🔄 **双框架支持**: 同时支持 Django 和 FastAPI
+- 🗄️ **数据库灵活**: Django 自动使用项目默认数据库，FastAPI 支持任意 SQLAlchemy 兼容数据库
+- 📁 **存储灵活**: 默认存储在 media/attachments 目录，可自定义路径
 - 📁 **完整功能**: 文件上传、下载、删除、列表查询
 - 🔐 **简化权限**: 基于 owner_id 的权限模型，支持 public/private 访问级别
 - 🎯 **认证解耦**: 通过外部注入 user_id 实现认证解耦
 - 📝 **Markdown 友好**: 返回 Markdown 格式的文件引用链接
-- 🗄️ **轻量存储**: SQLite + 本地文件系统，数据库仅存元信息
+- 🗄️ **轻量存储**: 数据库仅存元信息，文件存储于本地文件系统
 - 🔌 **即插即用**: 独立于具体业务表的通用数据模型
 - 🎨 **RESTful API**: 标准化的 API 设计
 
@@ -56,11 +58,16 @@ INSTALLED_APPS = [
     'chewy_attachment.django_app',
 ]
 
-# ChewyAttachment 配置
+# ChewyAttachment 配置（可选）
+# 如果不配置，将使用默认值
 CHEWY_ATTACHMENT = {
-    "STORAGE_ROOT": BASE_DIR / "media" / "attachments",
+    "STORAGE_ROOT": BASE_DIR / "media" / "attachments",  # 默认值
 }
 ```
+
+> **说明**：
+> - **数据库**：自动使用 Django 项目的默认数据库配置（`DATABASES['default']`），无需单独配置
+> - **存储路径**：默认为 `BASE_DIR / "media" / "attachments"`，文件存储在项目目录的 media/attachments 文件夹中
 
 2. **配置 URL**
 
@@ -83,42 +90,36 @@ python manage.py migrate
 ### FastAPI 集成
 
 ```python
-from fastapi import FastAPI, Depends
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-from chewy_attachment.fastapi_app.router import router as attachment_router
-from chewy_attachment.fastapi_app.models import Base
-from chewy_attachment.fastapi_app.dependencies import get_current_user_id
+from pathlib import Path
+from fastapi import FastAPI, Request
+from chewy_attachment.fastapi_app import dependencies, router
 
 app = FastAPI()
 
-# 数据库配置
-engine = create_engine("sqlite:///./attachments.db")
-SessionLocal = sessionmaker(bind=engine)
-Base.metadata.create_all(bind=engine)
+# 配置数据库和存储（使用项目自己的数据库配置）
+BASE_DIR = Path(__file__).resolve().parent
+DATABASE_URL = "sqlite:///./your_app.db"  # 或使用 PostgreSQL/MySQL 等
+STORAGE_ROOT = BASE_DIR / "media" / "attachments"  # 默认存储路径
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-# 自定义用户认证
-async def custom_get_user_id() -> int:
-    # 实现你的用户认证逻辑
-    return 1  # 示例
+# 初始化 ChewyAttachment
+dependencies.configure(DATABASE_URL, STORAGE_ROOT)
 
 # 挂载路由
-app.include_router(
-    attachment_router,
-    prefix="/api/attachments",
-    dependencies=[Depends(get_db)]
-)
+app.include_router(router, prefix="/api/attachments")
 
-# 覆盖默认的用户认证依赖
-app.dependency_overrides[get_current_user_id] = custom_get_user_id
+# 添加用户认证中间件（示例）
+@app.middleware("http")
+async def add_user_context(request: Request, call_next):
+    # 从你的认证系统获取用户 ID
+    request.state.user_id = "your-user-id"  # 替换为实际的用户认证逻辑
+    response = await call_next(request)
+    return response
 ```
+
+> **说明**：
+> - **数据库**：通过 `configure()` 方法传入数据库连接，支持任意 SQLAlchemy 兼容的数据库
+> - **存储路径**：默认为 `BASE_DIR / "media" / "attachments"`，文件存储在项目目录的 media/attachments 文件夹中
+> - **用户认证**：通过中间件设置 `request.state.user_id` 实现认证解耦
 
 ## 📚 API 文档
 
@@ -313,6 +314,8 @@ class Attachment:
     created_at: datetime   # 创建时间
 ```
 
+> **数据库表名**: 默认为 `chewy_attachments`，可通过自定义模型修改
+
 ## 🛠️ 配置选项
 
 ### Django 配置
@@ -322,11 +325,8 @@ class Attachment:
 
 # ChewyAttachment 配置
 CHEWY_ATTACHMENT = {
-    # 存储根目录 (必须)
+    # 存储根目录 (可选, 默认: BASE_DIR / "media" / "attachments")
     "STORAGE_ROOT": BASE_DIR / "media" / "attachments",
-    
-    # 自定义表名 (可选, 默认: "chewy_attachment_files")
-    # "TABLE_NAME": "my_custom_attachments",
     
     # 时间格式 (可选, 默认: "%Y-%m-%d %H:%M:%S")
     # "DATETIME_FORMAT": "%Y-%m-%d %H:%M:%S",
@@ -337,14 +337,54 @@ CHEWY_ATTACHMENT = {
     #     "chewy_attachment.django_app.permissions.IsOwnerOrPublicReadOnly",
     # ],
 }
+
+# 自定义模型 (可选, 类似 AUTH_USER_MODEL)
+# CHEWY_ATTACHMENT_MODEL = 'myapp.MyAttachment'
 ```
 
 **配置说明：**
 
-- `STORAGE_ROOT`: 文件存储的物理路径（必须配置）
-- `TABLE_NAME`: 数据库表名，默认 `chewy_attachment_files`
+- `STORAGE_ROOT`: 文件存储的物理路径（可选，默认为 `BASE_DIR / "media" / "attachments"`）
 - `DATETIME_FORMAT`: API 返回的时间字段格式
 - `PERMISSION_CLASSES`: 自定义 DRF 权限类列表
+- `CHEWY_ATTACHMENT_MODEL`: 自定义附件模型（类似 Django 的 `AUTH_USER_MODEL`）
+
+#### 自定义表名和模型
+
+ChewyAttachment 支持模型交换机制，类似于 Django 的 `AUTH_USER_MODEL`：
+
+```python
+# myapp/models.py
+from chewy_attachment.django_app.models import AttachmentBase
+
+class MyAttachment(AttachmentBase):
+    """自定义附件模型"""
+    
+    # 可以添加额外字段
+    category = models.CharField(max_length=50, blank=True, verbose_name="分类")
+    
+    class Meta(AttachmentBase.Meta):
+        db_table = "my_custom_attachments"  # 自定义表名
+        abstract = False
+        app_label = 'myapp'
+
+# settings.py
+CHEWY_ATTACHMENT_MODEL = 'myapp.MyAttachment'
+```
+
+**使用步骤：**
+
+1. 创建自定义模型（继承 `AttachmentBase`）
+2. 在 settings.py 中设置 `CHEWY_ATTACHMENT_MODEL`
+3. 运行 `python manage.py makemigrations myapp`
+4. 运行 `python manage.py migrate`
+
+**优势：**
+
+- ✅ **标准Django机制**：使用Django官方推荐的模型交换方式
+- ✅ **避免冲突**：每个项目使用自己的模型，不会有多项目冲突
+- ✅ **自动适配**：库的视图和序列化器自动使用指定模型
+- ✅ **灵活扩展**：可以添加任意自定义字段和方法
 
 #### 自定义权限类示例
 

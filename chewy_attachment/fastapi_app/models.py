@@ -11,7 +11,7 @@ from ..core.schemas import FileMetadata
 
 def get_attachment_table_name() -> str:
     """Get custom table name from environment variable or use default"""
-    return os.getenv("CHEWY_ATTACHMENT_TABLE_NAME", "chewy_attachment_files")
+    return os.getenv("CHEWY_ATTACHMENT_TABLE_NAME", "chewy_attachments")
 
 
 class Attachment(SQLModel, table=True):

@@ -53,7 +53,7 @@ ChewyAttachment/
 ### 数据模型
 
 ```
-表名: chewy_attachment_files
+表名: chewy_attachments
 
 字段:
 - id: UUID (Primary Key)

@@ -20,14 +20,8 @@ def get_storage_root():
     return Path(base_dir) / "media" / "attachments"
 
 
-def get_attachment_table_name():
-    """Get custom table name from Django settings"""
-    chewy_settings = getattr(settings, "CHEWY_ATTACHMENT", {})
-    return chewy_settings.get("TABLE_NAME", "chewy_attachment_files")
-
-
-class Attachment(models.Model):
-    """Attachment model for storing file metadata"""
+class AttachmentBase(models.Model):
+    """Abstract base model for storing file metadata"""
 
     id = models.UUIDField(
         primary_key=True,
@@ -69,7 +63,7 @@ class Attachment(models.Model):
     )
 
     class Meta:
-        db_table = "chewy_attachment_files"
+        abstract = True
         ordering = ["-created_at"]
         verbose_name = "附件"
         verbose_name_plural = "附件"
@@ -100,3 +94,17 @@ class Attachment(models.Model):
             user_id = str(request.user.id)
             return UserContext.authenticated(user_id)
         return UserContext.anonymous()
+
+
+class Attachment(AttachmentBase):
+    """
+    Default concrete implementation of AttachmentBase.
+    
+    This model can be swapped out by setting CHEWY_ATTACHMENT_MODEL
+    in your Django settings, similar to AUTH_USER_MODEL.
+    """
+
+    class Meta(AttachmentBase.Meta):
+        db_table = "chewy_attachments"
+        abstract = False
+        swappable = 'CHEWY_ATTACHMENT_MODEL'

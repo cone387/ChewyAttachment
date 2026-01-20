@@ -80,7 +80,7 @@ REST_FRAMEWORK = {
 
 CHEWY_ATTACHMENT = {
     "STORAGE_ROOT": BASE_DIR / "media" / "attachments",
-    # Optional: Custom table name (default: "chewy_attachment_files")
+    # Optional: Custom table name (default: "chewy_attachments")
     # "TABLE_NAME": "my_custom_attachments",
     # Optional: Custom permission classes
     # "PERMISSION_CLASSES": [
