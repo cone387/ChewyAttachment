@@ -29,7 +29,7 @@ def pytest_configure():
             "rest_framework",
             "chewy_attachment.django_app",
         ],
-        ROOT_URLCONF="chewy_attachment.django_app.urls",
+        ROOT_URLCONF="chewy_attachment.django_app.tests.test_urls",
         REST_FRAMEWORK={
             "DEFAULT_AUTHENTICATION_CLASSES": [],
             "DEFAULT_PERMISSION_CLASSES": [],

@@ -18,6 +18,20 @@ from .permissions import IsAuthenticatedForUpload, IsOwnerOrPublicReadOnly
 from .serializers import AttachmentSerializer, AttachmentUploadSerializer
 
 
+def get_attachment_model():
+    """获取当前活跃的 Attachment 模型（支持模型交换）"""
+    from django.conf import settings
+    
+    # 检查是否设置了自定义模型
+    model_name = getattr(settings, 'CHEWY_ATTACHMENT_MODEL', None)
+    if model_name:
+        app_label, model_class = model_name.split('.')
+        return apps.get_model(app_label, model_class)
+    
+    # 默认使用内置模型
+    return apps.get_model('chewy_attachment_django_app', 'Attachment')
+
+
 def get_permission_classes():
     """
     Get permission classes from settings or use defaults.
@@ -80,10 +94,6 @@ class AttachmentViewSet(viewsets.ModelViewSet):
     pagination_class = AttachmentPagination
     http_method_names = ["get", "post", "delete", "head", "options"]
 
-    def get_attachment_model(self):
-        """获取当前活跃的 Attachment 模型（支持模型交换）"""
-        return apps.get_model('chewy_attachment_django_app', 'Attachment')
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Dynamically load permission classes
@@ -92,7 +102,7 @@ class AttachmentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filter queryset based on user permissions"""
         user = self.request.user
-        Attachment = self.get_attachment_model()
+        Attachment = get_attachment_model()
         
         # Anonymous users: only public files
         if not user.is_authenticated:
@@ -122,7 +132,7 @@ class AttachmentViewSet(viewsets.ModelViewSet):
         storage = self.get_storage_engine()
         result = storage.save_file(content, original_name)
 
-        Attachment = self.get_attachment_model()
+        Attachment = get_attachment_model()
         attachment = Attachment.objects.create(
             id=generate_uuid(),
             original_name=original_name,
@@ -157,7 +167,7 @@ class AttachmentViewSet(viewsets.ModelViewSet):
         """Download file content"""
         instance = self.get_object()
 
-        user_context = self.get_attachment_model().get_user_context(request)
+        user_context = get_attachment_model().get_user_context(request)
         file_metadata = instance.to_file_metadata()
 
         if not PermissionChecker.can_download(file_metadata, user_context):
@@ -186,7 +196,7 @@ class AttachmentViewSet(viewsets.ModelViewSet):
         """Preview file in browser (inline display)"""
         instance = self.get_object()
 
-        user_context = self.get_attachment_model().get_user_context(request)
+        user_context = get_attachment_model().get_user_context(request)
         file_metadata = instance.to_file_metadata()
 
         if not PermissionChecker.can_download(file_metadata, user_context):
@@ -226,13 +236,9 @@ class AttachmentDownloadView(APIView):
         # Dynamically load permission classes
         self.permission_classes = get_permission_classes()
 
-    def get_attachment_model(self):
-        """获取当前活跃的 Attachment 模型（支持模型交换）"""
-        return apps.get_model('chewy_attachment_django_app', 'Attachment')
-
     def get_object(self, pk):
         """Get attachment by ID"""
-        Attachment = self.get_attachment_model()
+        Attachment = get_attachment_model()
         try:
             return Attachment.objects.get(pk=pk)
         except Attachment.DoesNotExist:
@@ -244,7 +250,7 @@ class AttachmentDownloadView(APIView):
 
         self.check_object_permissions(request, attachment)
 
-        user_context = self.get_attachment_model().get_user_context(request)
+        user_context = get_attachment_model().get_user_context(request)
         file_metadata = attachment.to_file_metadata()
 
         if not PermissionChecker.can_download(file_metadata, user_context):

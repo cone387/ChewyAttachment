@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2026-01-20
+
+### Fixed
+- Refactored duplicate `get_attachment_model()` methods in ViewSets
+- Extracted model resolution logic to module-level function to follow DRY principle
+- Improved code maintainability by eliminating redundant implementations
+
+### Changed
+- `get_attachment_model()` is now a module-level function instead of class methods
+- All ViewSets use the same model resolution logic consistently
+
 ## [0.4.2] - 2026-01-20
 
 ### Fixed
