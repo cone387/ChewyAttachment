@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-01-20
+
+### Fixed
+- Fixed Django model swapping compatibility issue in ViewSets
+- ViewSets now properly use `apps.get_model()` to support swapped models
+- Resolved "Manager isn't available" error when using `CHEWY_ATTACHMENT_MODEL` setting
+
+### Changed
+- ViewSets no longer use hardcoded `queryset` attribute, instead dynamically resolve models
+- Added `get_attachment_model()` method to ViewSets for consistent model access
+
 ## [0.4.0] - 2026-01-20
 
 ### Added
@@ -63,6 +74,7 @@ For existing users upgrading from v0.3.x:
 - Test coverage for Django app
 - FastAPI integration examples
 
+[0.4.1]: https://github.com/cone387/ChewyAttachment/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/cone387/ChewyAttachment/compare/v0.3.2...v0.4.0
 [0.2.0]: https://github.com/cone387/ChewyAttachment/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/cone387/ChewyAttachment/releases/tag/v0.1.0
