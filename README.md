@@ -14,13 +14,14 @@ ChewyAttachment 是一个通用的文件/附件管理插件，提供开箱即用
 ## ✨ 核心特性
 
 - 🔄 **双框架支持**: 同时支持 Django 和 FastAPI
+- ☁️ **多存储支持**: 本地文件存储 + AWS S3 云存储（通过 django-storages）
 - 🗄️ **数据库灵活**: Django 自动使用项目默认数据库，FastAPI 支持任意 SQLAlchemy 兼容数据库
 - 📁 **存储灵活**: 默认存储在 media/attachments 目录，可自定义路径
 - 📁 **完整功能**: 文件上传、下载、删除、列表查询
 - 🔐 **简化权限**: 基于 owner_id 的权限模型，支持 public/private 访问级别
 - 🎯 **认证解耦**: 通过外部注入 user_id 实现认证解耦
 - 📝 **Markdown 友好**: 返回 Markdown 格式的文件引用链接
-- 🗄️ **轻量存储**: 数据库仅存元信息，文件存储于本地文件系统
+- 🗄️ **轻量存储**: 数据库仅存元信息，文件存储于本地文件系统或云存储
 - 🔌 **即插即用**: 独立于具体业务表的通用数据模型
 - 🎨 **RESTful API**: 标准化的 API 设计
 
@@ -33,8 +34,14 @@ pip install chewy-attachment
 # 安装 Django 支持
 pip install chewy-attachment[django]
 
+# 安装 Django + S3 支持
+pip install chewy-attachment[django-s3]
+
 # 安装 FastAPI 支持
 pip install chewy-attachment[fastapi]
+
+# 安装 FastAPI + S3 支持
+pip install chewy-attachment[fastapi-s3]
 
 # 安装全部功能(开发)
 pip install chewy-attachment[dev]
@@ -55,14 +62,24 @@ pip install -e .
 # settings.py
 INSTALLED_APPS = [
     # ...
+    'storages',  # 如果使用 S3 存储，需要添加
     'chewy_attachment.django_app',
 ]
 
 # ChewyAttachment 配置（可选）
 # 如果不配置，将使用默认值
 CHEWY_ATTACHMENT = {
-    "STORAGE_ROOT": BASE_DIR / "media" / "attachments",  # 默认值
+    "STORAGE_ENGINE": "file",  # 或 "django" (用于 S3)
+    "STORAGE_ROOT": BASE_DIR / "media" / "attachments",  # 本地存储路径
 }
+
+# S3 存储配置（可选）
+# 如果使用 S3，需要配置以下设置
+# AWS_ACCESS_KEY_ID = 'your-access-key'
+# AWS_SECRET_ACCESS_KEY = 'your-secret-key'
+# AWS_STORAGE_BUCKET_NAME = 'your-bucket-name'
+# AWS_S3_REGION_NAME = 'us-east-1'
+# DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 ```
 
 > **说明**：
@@ -325,22 +342,88 @@ class Attachment:
 
 # ChewyAttachment 配置
 CHEWY_ATTACHMENT = {
+    # 存储引擎 (可选, 默认: "file")
+    # "file": 本地文件存储
+    # "django": 使用 Django 存储系统 (支持 django-storages)
+    "STORAGE_ENGINE": "file",
+    
     # 存储根目录 (可选, 默认: BASE_DIR / "media" / "attachments")
+    # 仅在 STORAGE_ENGINE="file" 时使用
     "STORAGE_ROOT": BASE_DIR / "media" / "attachments",
     
+    # 文件大小限制 (可选, 默认: 10MB)
+    "MAX_FILE_SIZE": 10 * 1024 * 1024,
+    
+    # 允许的文件扩展名 (可选, 默认: 无限制)
+    "ALLOWED_EXTENSIONS": [
+        ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg",
+        ".pdf", ".doc", ".docx", ".txt", ".zip",
+    ],
+    
     # 时间格式 (可选, 默认: "%Y-%m-%d %H:%M:%S")
-    # "DATETIME_FORMAT": "%Y-%m-%d %H:%M:%S",
+    "DATETIME_FORMAT": "%Y-%m-%d %H:%M:%S",
     
     # 自定义权限类 (可选)
-    # "PERMISSION_CLASSES": [
-    #     "chewy_attachment.django_app.permissions.IsAuthenticatedForUpload",
-    #     "chewy_attachment.django_app.permissions.IsOwnerOrPublicReadOnly",
-    # ],
+    "PERMISSION_CLASSES": [
+        "chewy_attachment.django_app.permissions.IsAuthenticatedForUpload",
+        "chewy_attachment.django_app.permissions.IsOwnerOrPublicReadOnly",
+    ],
 }
 
 # 自定义模型 (可选, 类似 AUTH_USER_MODEL)
 # CHEWY_ATTACHMENT_MODEL = 'myapp.MyAttachment'
 ```
+
+#### S3 云存储配置
+
+ChewyAttachment 通过 django-storages 支持 AWS S3 和兼容 S3 的云存储服务：
+
+```python
+# settings.py
+
+# 1. 安装依赖: pip install 'chewy-attachment[django-s3]'
+
+# 2. 添加到 INSTALLED_APPS
+INSTALLED_APPS = [
+    # ...
+    'storages',  # django-storages
+    'chewy_attachment.django_app',
+]
+
+# 3. AWS S3 配置
+AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')
+AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME', 'us-east-1')
+
+# S3 设置
+AWS_DEFAULT_ACL = 'private'  # 文件默认私有
+AWS_S3_FILE_OVERWRITE = False  # 不覆盖同名文件
+AWS_QUERYSTRING_AUTH = True  # 使用签名 URL
+AWS_QUERYSTRING_EXPIRE = 3600  # 签名 URL 1小时过期
+
+# 使用 S3 作为默认文件存储
+DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+
+# 4. ChewyAttachment 配置
+CHEWY_ATTACHMENT = {
+    "STORAGE_ENGINE": "django",  # 使用 Django 存储系统
+    "MAX_FILE_SIZE": 10 * 1024 * 1024,  # 10MB
+    "ALLOWED_EXTENSIONS": [".jpg", ".png", ".pdf", ".txt"],
+}
+```
+
+**测试 S3 配置：**
+
+```bash
+# 测试 S3 连接和基本操作
+python manage.py test_s3_storage
+
+# 测试并清理测试文件
+python manage.py test_s3_storage --cleanup
+```
+
+**详细 S3 配置指南：** 查看 [S3 存储配置文档](docs/S3_STORAGE.md)
 
 **配置说明：**
 

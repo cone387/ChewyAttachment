@@ -1,0 +1,6 @@
+# Django S3 Example Requirements
+django>=4.2.0
+djangorestframework>=3.14.0
+django-storages[s3]>=1.14.0
+boto3>=1.26.0
+chewy-attachment

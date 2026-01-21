@@ -114,9 +114,10 @@ class AttachmentViewSet(viewsets.ModelViewSet):
             Q(owner_id=str(user.id)) | Q(is_public=True)
         )
 
-    def get_storage_engine(self) -> FileStorageEngine:
+    def get_storage_engine(self):
         """Get storage engine instance"""
-        return FileStorageEngine(get_storage_root())
+        from .storage import get_storage_engine
+        return get_storage_engine()
 
     def create(self, request, *args, **kwargs):
         """Handle file upload"""
@@ -179,17 +180,24 @@ class AttachmentViewSet(viewsets.ModelViewSet):
         storage = self.get_storage_engine()
 
         try:
-            file_path = storage.get_file_path(instance.storage_path)
+            # Check if this is a cloud storage that supports direct URLs
+            if hasattr(storage, 'get_file_url') and hasattr(storage, 'storage') and hasattr(storage.storage, 'url'):
+                # For django-storages cloud backends, redirect to signed URL
+                file_url = storage.get_file_url(instance.storage_path)
+                from django.http import HttpResponseRedirect
+                return HttpResponseRedirect(file_url)
+            else:
+                # For local storage, serve file directly
+                file_path = storage.get_file_path(instance.storage_path)
+                response = FileResponse(
+                    open(file_path, "rb"),
+                    content_type=instance.mime_type,
+                )
+                response["Content-Disposition"] = f'attachment; filename="{instance.original_name}"'
+                response["Content-Length"] = instance.size
+                return response
         except Exception:
             raise Http404("File not found on storage")
-
-        response = FileResponse(
-            open(file_path, "rb"),
-            content_type=instance.mime_type,
-        )
-        response["Content-Disposition"] = f'attachment; filename="{instance.original_name}"'
-        response["Content-Length"] = instance.size
-        return response
 
     @action(detail=True, methods=["get"], url_path="preview")
     def preview(self, request, pk=None):
@@ -208,17 +216,24 @@ class AttachmentViewSet(viewsets.ModelViewSet):
         storage = self.get_storage_engine()
 
         try:
-            file_path = storage.get_file_path(instance.storage_path)
+            # Check if this is a cloud storage that supports direct URLs
+            if hasattr(storage, 'get_file_url') and hasattr(storage.storage, 'url'):
+                # For django-storages cloud backends, redirect to signed URL
+                file_url = storage.get_file_url(instance.storage_path)
+                from django.http import HttpResponseRedirect
+                return HttpResponseRedirect(file_url)
+            else:
+                # For local storage, serve file directly
+                file_path = storage.get_file_path(instance.storage_path)
+                response = FileResponse(
+                    open(file_path, "rb"),
+                    content_type=instance.mime_type,
+                )
+                response["Content-Disposition"] = f'inline; filename="{instance.original_name}"'
+                response["Content-Length"] = instance.size
+                return response
         except Exception:
             raise Http404("File not found on storage")
-
-        response = FileResponse(
-            open(file_path, "rb"),
-            content_type=instance.mime_type,
-        )
-        response["Content-Disposition"] = f'inline; filename="{instance.original_name}"'
-        response["Content-Length"] = instance.size
-        return response
 
 
 class AttachmentDownloadView(APIView):

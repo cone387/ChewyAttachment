@@ -17,6 +17,8 @@ class AttachmentSerializer(serializers.ModelSerializer):
     """Serializer for Attachment model (read operations)"""
 
     preview_url = serializers.SerializerMethodField()
+    download_url = serializers.SerializerMethodField()
+    file_url = serializers.SerializerMethodField()
     created_at = serializers.SerializerMethodField()
 
     class Meta:
@@ -30,13 +32,43 @@ class AttachmentSerializer(serializers.ModelSerializer):
             "is_public",
             "created_at",
             "preview_url",
+            "download_url",
+            "file_url",
         ]
         read_only_fields = fields
 
     def get_preview_url(self, obj):
         """Generate preview URL path dynamically based on router configuration"""
-        # Use reverse to generate URL based on actual route config
-        return reverse('attachment-preview', kwargs={'pk': obj.id})
+        request = self.context.get('request')
+        if request:
+            return reverse('attachment-preview', kwargs={'pk': obj.id}, request=request)
+        return None
+
+    def get_download_url(self, obj):
+        """Generate download URL path"""
+        request = self.context.get('request')
+        if request:
+            return reverse('attachment-download', kwargs={'pk': obj.id}, request=request)
+        return None
+
+    def get_file_url(self, obj):
+        """
+        Get direct file URL for cloud storage or signed URL.
+        For local storage, returns the download URL.
+        """
+        try:
+            from .storage import get_storage_engine
+            storage = get_storage_engine()
+            
+            # For cloud storage with direct URL support
+            if hasattr(storage, 'get_file_url'):
+                return storage.get_file_url(obj.storage_path)
+            else:
+                # For local storage, return download URL
+                return self.get_download_url(obj)
+        except Exception:
+            # Fallback to download URL
+            return self.get_download_url(obj)
 
     def get_created_at(self, obj):
         """Format created_at with configured format"""
@@ -56,4 +88,25 @@ class AttachmentUploadSerializer(serializers.Serializer):
         """Validate uploaded file"""
         if not value:
             raise serializers.ValidationError("No file provided")
+        
+        # Check file size limit
+        chewy_settings = getattr(settings, "CHEWY_ATTACHMENT", {})
+        max_size = chewy_settings.get("MAX_FILE_SIZE", 10 * 1024 * 1024)  # 10MB default
+        
+        if value.size > max_size:
+            raise serializers.ValidationError(
+                f"File size ({value.size} bytes) exceeds maximum allowed size ({max_size} bytes)"
+            )
+        
+        # Check allowed extensions
+        allowed_extensions = chewy_settings.get("ALLOWED_EXTENSIONS")
+        if allowed_extensions:
+            import os
+            file_ext = os.path.splitext(value.name)[1].lower()
+            if file_ext not in allowed_extensions:
+                raise serializers.ValidationError(
+                    f"File extension '{file_ext}' is not allowed. "
+                    f"Allowed extensions: {', '.join(allowed_extensions)}"
+                )
+        
         return value

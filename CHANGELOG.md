@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-01-21
+
+### Added
+- **AWS S3 云存储支持** 🎉
+  - 通过 django-storages 集成 AWS S3 和兼容 S3 的云存储服务
+  - 新增 `django-s3` 和 `fastapi-s3` 安装选项
+  - 支持私有文件的签名 URL 访问
+  - 支持公有文件的直接 URL 访问
+- **存储引擎架构重构**
+  - 新增 `DjangoStorageEngine` 类，完全兼容 django-storages
+  - 保留现有的 `FileStorageEngine` 用于本地存储
+  - 新增 `S3StorageEngine` 用于 FastAPI 直接 S3 集成
+- **配置系统增强**
+  - 新增 `STORAGE_ENGINE` 配置选项 (`"file"` 或 `"django"`)
+  - 新增 `chewy_attachment.django_app.storage` 模块提供存储配置工具
+  - 支持自定义 S3 存储类配置
+- **文件验证功能**
+  - 新增 `MAX_FILE_SIZE` 配置选项
+  - 新增 `ALLOWED_EXTENSIONS` 配置选项
+  - 序列化器自动验证文件大小和类型
+- **API 响应增强**
+  - 新增 `download_url` 字段
+  - 新增 `file_url` 字段（云存储直接访问 URL）
+  - 改进文件下载和预览的 URL 重定向逻辑
+- **管理命令**
+  - 新增 `test_s3_storage` 管理命令用于测试 S3 配置
+  - 支持 `--cleanup` 参数自动清理测试文件
+- **完整文档**
+  - 新增 `docs/S3_STORAGE.md` 详细配置指南
+  - 新增 Django S3 示例项目 `examples/django_s3_example/`
+  - 更新 README 添加 S3 配置说明
+
+### Changed
+- **视图逻辑优化**
+  - 文件下载和预览支持云存储 URL 重定向
+  - 改进存储引擎获取逻辑，统一使用 `get_storage_engine()` 函数
+- **依赖管理**
+  - `boto3` 添加到 `django-s3` 和 `fastapi-s3` 依赖组
+  - 保持核心包轻量，S3 依赖仅在需要时安装
+
+### Technical Details
+- 完全向后兼容，现有本地存储配置无需修改
+- S3 存储支持 MinIO、阿里云 OSS 等 S3 兼容服务
+- 支持 CloudFront CDN 集成
+- 自动处理签名 URL 生成和过期时间
+- 支持多区域 S3 配置
+
 ## [0.4.3] - 2026-01-20
 
 ### Fixed

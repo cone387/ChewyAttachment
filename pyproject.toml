@@ -1,6 +1,6 @@
 [project]
 name = "chewy-attachment"
-version = "0.4.3"
+version = "0.5.0"
 description = "通用图片/附件管理插件，支持 Django 和 FastAPI"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -53,11 +53,26 @@ django = [
     "djangorestframework>=3.14.0",
 ]
 
+django-s3 = [
+    "django>=4.2.0",
+    "djangorestframework>=3.14.0",
+    "django-storages[s3]>=1.14.0",
+    "boto3>=1.26.0",
+]
+
 fastapi = [
     "fastapi>=0.109.0",
     "sqlmodel>=0.0.14",
     "python-multipart>=0.0.6",
     "uvicorn>=0.27.0",
+]
+
+fastapi-s3 = [
+    "fastapi>=0.109.0",
+    "sqlmodel>=0.0.14",
+    "python-multipart>=0.0.6",
+    "uvicorn>=0.27.0",
+    "boto3>=1.26.0",
 ]
 
 test = [
@@ -79,7 +94,7 @@ test-fastapi = [
 ]
 
 dev = [
-    "chewy-attachment[django,fastapi,test-django,test-fastapi]",
+    "chewy-attachment[django-s3,fastapi-s3,test-django,test-fastapi]",
     "ruff>=0.1.0",
 ]
 

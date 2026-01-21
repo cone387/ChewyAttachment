@@ -10,3 +10,8 @@ class ChewyAttachmentConfig(AppConfig):
     label = "chewy_attachment_django_app"  # 明确指定应用标签
     verbose_name = "Chewy Attachment"
     default_auto_field = "django.db.models.BigAutoField"
+
+    def ready(self):
+        """App ready hook - perform initialization"""
+        # Import signal handlers if any
+        pass
