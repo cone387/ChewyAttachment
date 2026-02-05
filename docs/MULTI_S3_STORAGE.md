@@ -267,6 +267,104 @@ def migrate_attachments(attachment_ids, target_config_id):
 | `public_read` | bool | 否 | 是否公开可读，默认 `False` |
 | `extra_options` | dict | 否 | 额外配置选项 |
 
+## 数据迁移
+
+当用户切换存储配置后，可能需要将旧数据迁移到新存储。ChewyAttachment 提供了 `StorageMigrator` 类来处理这种场景。
+
+### 基本用法
+
+```python
+from chewy_attachment.core.storage import StorageManager, StorageMigrator
+
+# 获取 StorageManager 和创建 Migrator
+manager = StorageManager.get_instance()
+migrator = StorageMigrator(manager)
+
+# 迁移单个文件
+result = migrator.migrate_file(
+    attachment_id="123",
+    original_name="document.pdf",
+    source_config_id="old-s3",
+    source_storage_path="2026/01/01/abc.pdf",
+    target_config_id="new-s3",
+    delete_source=True,  # 迁移成功后删除源文件
+)
+
+if result.success:
+    print(f"迁移成功: {result.new_storage_path}")
+else:
+    print(f"迁移失败: {result.error}")
+```
+
+### 批量迁移
+
+```python
+# 批量迁移附件
+attachments = Attachment.objects.filter(
+    owner_id=user_id,
+    storage_config_id="old-s3",
+)
+
+def on_progress(current, total, result):
+    print(f"进度: {current}/{total} - {result.original_name}")
+    if not result.success:
+        print(f"  错误: {result.error}")
+
+summary = migrator.migrate_batch(
+    attachments=attachments,
+    target_config_id="new-s3",
+    delete_source=True,
+    on_progress=on_progress,
+)
+
+print(f"迁移完成: 成功 {summary.success_count}, 失败 {summary.failed_count}, 跳过 {summary.skipped_count}")
+```
+
+### 同步并更新记录
+
+`sync_to_target` 方法可以在迁移文件的同时更新数据库记录：
+
+```python
+# Django 示例
+def update_attachment(attachment_id, new_path, new_config_id):
+    Attachment.objects.filter(id=attachment_id).update(
+        storage_path=new_path,
+        storage_config_id=new_config_id,
+    )
+
+summary = migrator.sync_to_target(
+    attachments=Attachment.objects.filter(owner_id=user_id),
+    target_config_id="new-s3",
+    update_callback=update_attachment,
+    delete_source=True,
+    on_progress=lambda c, t, r: print(f"{c}/{t}: {r.original_name}"),
+)
+```
+
+### MigrationResult 字段说明
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `attachment_id` | str | 附件 ID |
+| `original_name` | str | 原始文件名 |
+| `source_config_id` | str | 源存储配置 ID |
+| `target_config_id` | str | 目标存储配置 ID |
+| `old_storage_path` | str | 原存储路径 |
+| `new_storage_path` | str | 新存储路径（迁移成功时） |
+| `success` | bool | 是否成功 |
+| `error` | str | 错误信息（失败时） |
+| `source_deleted` | bool | 源文件是否已删除 |
+
+### MigrationSummary 字段说明
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `total` | int | 总文件数 |
+| `success_count` | int | 成功数 |
+| `failed_count` | int | 失败数 |
+| `skipped_count` | int | 跳过数（已在目标存储） |
+| `results` | list | 所有迁移结果列表 |
+
 ## 安全建议
 
 1. **加密存储敏感信息**：`access_key` 和 `secret_key` 应加密存储在数据库中

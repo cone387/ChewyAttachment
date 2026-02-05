@@ -8,7 +8,7 @@ from threading import Lock
 from typing import Optional, Union, Dict
 
 from .exceptions import StorageException
-from .schemas import FileUploadResult, S3ConfigSchema
+from .schemas import FileUploadResult, S3ConfigSchema, MigrationResult, MigrationSummary
 from .utils import detect_mime_type, generate_uuid, get_file_extension, safe_filename
 
 
@@ -877,3 +877,326 @@ class StorageManager:
     def list_configs(self) -> list:
         """List available configuration IDs from the provider."""
         return self._provider.list_configs()
+
+
+class StorageMigrator:
+    """
+    Migrator for transferring files between different storage configurations.
+    
+    This class handles the migration of files from one storage configuration
+    to another, supporting both single file and batch migrations.
+    
+    Features:
+    - Single file migration
+    - Batch migration with progress callback
+    - Optional source file deletion after successful migration
+    - Detailed migration results and summary
+    - Support for migrating between any storage types (local, S3, etc.)
+    
+    Usage:
+        # Create migrator
+        manager = StorageManager.get_instance()
+        migrator = StorageMigrator(manager)
+        
+        # Migrate a single file
+        result = migrator.migrate_file(
+            attachment_id="123",
+            original_name="document.pdf",
+            source_config_id="old-s3",
+            source_storage_path="2026/01/01/abc.pdf",
+            target_config_id="new-s3",
+            delete_source=True,
+        )
+        
+        # Batch migration with callback
+        def on_progress(current, total, result):
+            print(f"Migrated {current}/{total}: {result.original_name}")
+        
+        summary = migrator.migrate_batch(
+            attachments=[...],
+            target_config_id="new-s3",
+            delete_source=True,
+            on_progress=on_progress,
+        )
+    """
+    
+    def __init__(self, storage_manager: StorageManager):
+        """
+        Initialize StorageMigrator.
+        
+        Args:
+            storage_manager: StorageManager instance for accessing storage engines
+        """
+        self._manager = storage_manager
+    
+    def migrate_file(
+        self,
+        attachment_id: str,
+        original_name: str,
+        source_config_id: Optional[str],
+        source_storage_path: str,
+        target_config_id: str,
+        delete_source: bool = False,
+        new_storage_path: Optional[str] = None,
+    ) -> MigrationResult:
+        """
+        Migrate a single file from source storage to target storage.
+        
+        Args:
+            attachment_id: ID of the attachment being migrated
+            original_name: Original filename (used for generating new path if needed)
+            source_config_id: Source storage configuration ID (None for local storage)
+            source_storage_path: Current storage path of the file
+            target_config_id: Target storage configuration ID
+            delete_source: Whether to delete the source file after successful migration
+            new_storage_path: Optional custom path in target storage. If None, generates new path.
+        
+        Returns:
+            MigrationResult with migration details
+        """
+        result = MigrationResult(
+            attachment_id=attachment_id,
+            original_name=original_name,
+            source_config_id=source_config_id,
+            target_config_id=target_config_id,
+            old_storage_path=source_storage_path,
+        )
+        
+        try:
+            # Get source storage engine
+            if source_config_id:
+                source_engine = self._manager.get_engine(source_config_id)
+            else:
+                source_engine = self._manager.get_default_engine()
+            
+            # Get target storage engine
+            target_engine = self._manager.get_engine(target_config_id)
+            
+            # Check if source file exists
+            if not source_engine.file_exists(source_storage_path):
+                result.error = f"Source file not found: {source_storage_path}"
+                return result
+            
+            # Read file content from source
+            content = source_engine.get_file(source_storage_path)
+            
+            # Save to target storage
+            upload_result = target_engine.save_file(
+                content=content,
+                original_name=original_name,
+                storage_path=new_storage_path,
+            )
+            
+            result.new_storage_path = upload_result.storage_path
+            result.success = True
+            
+            # Delete source file if requested
+            if delete_source:
+                try:
+                    source_engine.delete_file(source_storage_path)
+                    result.source_deleted = True
+                except Exception as e:
+                    # Migration succeeded but source deletion failed
+                    # This is not a critical error, just log it
+                    result.error = f"Migration succeeded but failed to delete source: {e}"
+            
+            return result
+            
+        except StorageException as e:
+            result.error = str(e)
+            return result
+        except Exception as e:
+            result.error = f"Unexpected error: {e}"
+            return result
+    
+    def migrate_batch(
+        self,
+        attachments: list,
+        target_config_id: str,
+        delete_source: bool = False,
+        on_progress: Optional[callable] = None,
+        on_error: Optional[callable] = None,
+        stop_on_error: bool = False,
+    ) -> MigrationSummary:
+        """
+        Migrate multiple files to a target storage configuration.
+        
+        Args:
+            attachments: List of attachment objects or dicts with required fields:
+                        - id: Attachment ID
+                        - original_name: Original filename
+                        - storage_config_id: Current storage configuration ID
+                        - storage_path: Current storage path
+            target_config_id: Target storage configuration ID
+            delete_source: Whether to delete source files after successful migration
+            on_progress: Optional callback function(current: int, total: int, result: MigrationResult)
+            on_error: Optional callback function(result: MigrationResult)
+            stop_on_error: Whether to stop migration on first error
+        
+        Returns:
+            MigrationSummary with overall migration statistics and individual results
+        """
+        summary = MigrationSummary()
+        total = len(attachments)
+        
+        for index, attachment in enumerate(attachments, 1):
+            # Extract attachment info (support both objects and dicts)
+            if isinstance(attachment, dict):
+                attachment_id = attachment.get("id", "")
+                original_name = attachment.get("original_name", "")
+                source_config_id = attachment.get("storage_config_id")
+                source_storage_path = attachment.get("storage_path", "")
+            else:
+                attachment_id = getattr(attachment, "id", "")
+                original_name = getattr(attachment, "original_name", "")
+                source_config_id = getattr(attachment, "storage_config_id", None)
+                source_storage_path = getattr(attachment, "storage_path", "")
+            
+            # Skip if already in target storage
+            if source_config_id == target_config_id:
+                result = MigrationResult(
+                    attachment_id=str(attachment_id),
+                    original_name=original_name,
+                    source_config_id=source_config_id,
+                    target_config_id=target_config_id,
+                    old_storage_path=source_storage_path,
+                    new_storage_path=source_storage_path,
+                    success=True,
+                    error="Skipped: already in target storage",
+                )
+                summary.add_result(result)
+                
+                if on_progress:
+                    on_progress(index, total, result)
+                
+                continue
+            
+            # Migrate the file
+            result = self.migrate_file(
+                attachment_id=str(attachment_id),
+                original_name=original_name,
+                source_config_id=source_config_id,
+                source_storage_path=source_storage_path,
+                target_config_id=target_config_id,
+                delete_source=delete_source,
+            )
+            
+            summary.add_result(result)
+            
+            # Call progress callback
+            if on_progress:
+                on_progress(index, total, result)
+            
+            # Handle errors
+            if not result.success:
+                if on_error:
+                    on_error(result)
+                
+                if stop_on_error:
+                    break
+        
+        return summary
+    
+    def sync_to_target(
+        self,
+        attachments: list,
+        target_config_id: str,
+        update_callback: Optional[callable] = None,
+        delete_source: bool = False,
+        on_progress: Optional[callable] = None,
+    ) -> MigrationSummary:
+        """
+        Sync attachments to a target storage and update their records.
+        
+        This is a higher-level method that:
+        1. Migrates files to the target storage
+        2. Calls update_callback to update attachment records with new storage info
+        
+        Args:
+            attachments: List of attachment objects or dicts
+            target_config_id: Target storage configuration ID
+            update_callback: Callback to update attachment record after migration.
+                           Signature: update_callback(attachment_id, new_storage_path, new_config_id)
+            delete_source: Whether to delete source files after successful migration
+            on_progress: Optional progress callback
+        
+        Returns:
+            MigrationSummary with migration results
+        
+        Example:
+            def update_attachment(attachment_id, new_path, new_config_id):
+                Attachment.objects.filter(id=attachment_id).update(
+                    storage_path=new_path,
+                    storage_config_id=new_config_id,
+                )
+            
+            summary = migrator.sync_to_target(
+                attachments=Attachment.objects.filter(owner_id=user_id),
+                target_config_id="new-s3",
+                update_callback=update_attachment,
+                delete_source=True,
+            )
+        """
+        summary = MigrationSummary()
+        total = len(attachments)
+        
+        for index, attachment in enumerate(attachments, 1):
+            # Extract attachment info
+            if isinstance(attachment, dict):
+                attachment_id = attachment.get("id", "")
+                original_name = attachment.get("original_name", "")
+                source_config_id = attachment.get("storage_config_id")
+                source_storage_path = attachment.get("storage_path", "")
+            else:
+                attachment_id = getattr(attachment, "id", "")
+                original_name = getattr(attachment, "original_name", "")
+                source_config_id = getattr(attachment, "storage_config_id", None)
+                source_storage_path = getattr(attachment, "storage_path", "")
+            
+            # Skip if already in target storage
+            if source_config_id == target_config_id:
+                result = MigrationResult(
+                    attachment_id=str(attachment_id),
+                    original_name=original_name,
+                    source_config_id=source_config_id,
+                    target_config_id=target_config_id,
+                    old_storage_path=source_storage_path,
+                    new_storage_path=source_storage_path,
+                    success=True,
+                    error="Skipped: already in target storage",
+                )
+                summary.add_result(result)
+                
+                if on_progress:
+                    on_progress(index, total, result)
+                
+                continue
+            
+            # Migrate the file
+            result = self.migrate_file(
+                attachment_id=str(attachment_id),
+                original_name=original_name,
+                source_config_id=source_config_id,
+                source_storage_path=source_storage_path,
+                target_config_id=target_config_id,
+                delete_source=delete_source,
+            )
+            
+            # Update attachment record if migration succeeded
+            if result.success and update_callback and result.new_storage_path:
+                try:
+                    update_callback(
+                        str(attachment_id),
+                        result.new_storage_path,
+                        target_config_id,
+                    )
+                except Exception as e:
+                    # Record update failed, but file was migrated
+                    result.error = f"File migrated but record update failed: {e}"
+            
+            summary.add_result(result)
+            
+            if on_progress:
+                on_progress(index, total, result)
+        
+        return summary
