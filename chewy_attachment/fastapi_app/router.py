@@ -3,17 +3,19 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlmodel import Session
 
 from ..core.schemas import UserContext
-from ..core.storage import FileStorageEngine
+from ..core.storage import BaseStorageEngine
 from . import crud
 from .dependencies import (
     get_current_user_optional,
     get_current_user_required,
     get_session,
     get_storage_engine,
+    get_storage_engine_for_attachment,
+    get_storage_engine_for_upload,
     require_delete_permission,
     require_view_permission,
 )
@@ -78,8 +80,8 @@ async def upload_file(
     request: Request,
     file: UploadFile = File(...),
     is_public: bool = Form(default=False),
+    storage_config_id: Optional[str] = Form(default=None, description="S3存储配置ID"),
     session: Session = Depends(get_session),
-    storage: FileStorageEngine = Depends(get_storage_engine),
     user: UserContext = Depends(get_current_user_required),
 ):
     """
@@ -87,10 +89,12 @@ async def upload_file(
 
     - **file**: File to upload
     - **is_public**: Whether the file should be publicly accessible
+    - **storage_config_id**: Optional S3 storage configuration ID
     """
     content = await file.read()
     original_name = file.filename or "unnamed"
 
+    storage, actual_config_id = get_storage_engine_for_upload(storage_config_id)
     result = storage.save_file(content, original_name)
 
     attachment_data = AttachmentCreate(
@@ -100,6 +104,7 @@ async def upload_file(
         size=result.size,
         owner_id=user.user_id,
         is_public=is_public,
+        storage_config_id=actual_config_id,
     )
 
     attachment = crud.create_attachment(session, attachment_data)
@@ -135,27 +140,33 @@ async def get_file_info(
 )
 async def download_file(
     attachment: Attachment = Depends(require_view_permission),
-    storage: FileStorageEngine = Depends(get_storage_engine),
 ):
     """
     Download file content (attachment mode - triggers download).
 
     - **attachment_id**: UUID of the attachment
     """
+    storage = get_storage_engine_for_attachment(attachment.storage_config_id)
+    
     try:
-        file_path = storage.get_file_path(attachment.storage_path)
+        # For S3 storage, redirect to pre-signed URL
+        if hasattr(storage, 's3_client'):
+            file_url = storage.get_file_url(attachment.storage_path)
+            return RedirectResponse(url=file_url, status_code=status.HTTP_302_FOUND)
+        else:
+            # For local storage, serve file directly
+            file_path = storage.get_file_path(attachment.storage_path)
+            return FileResponse(
+                path=file_path,
+                media_type=attachment.mime_type,
+                filename=attachment.original_name,
+                headers={"Content-Disposition": f'attachment; filename="{attachment.original_name}"'},
+            )
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="File not found on storage",
         )
-
-    return FileResponse(
-        path=file_path,
-        media_type=attachment.mime_type,
-        filename=attachment.original_name,
-        headers={"Content-Disposition": f'attachment; filename="{attachment.original_name}"'},
-    )
 
 
 @router.get(
@@ -167,27 +178,33 @@ async def download_file(
 )
 async def preview_file(
     attachment: Attachment = Depends(require_view_permission),
-    storage: FileStorageEngine = Depends(get_storage_engine),
 ):
     """
     Preview file in browser (inline mode - displays in browser).
 
     - **attachment_id**: UUID of the attachment
     """
+    storage = get_storage_engine_for_attachment(attachment.storage_config_id)
+    
     try:
-        file_path = storage.get_file_path(attachment.storage_path)
+        # For S3 storage, redirect to pre-signed URL
+        if hasattr(storage, 's3_client'):
+            file_url = storage.get_file_url(attachment.storage_path)
+            return RedirectResponse(url=file_url, status_code=status.HTTP_302_FOUND)
+        else:
+            # For local storage, serve file directly
+            file_path = storage.get_file_path(attachment.storage_path)
+            return FileResponse(
+                path=file_path,
+                media_type=attachment.mime_type,
+                filename=attachment.original_name,
+                headers={"Content-Disposition": f'inline; filename="{attachment.original_name}"'},
+            )
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="File not found on storage",
         )
-
-    return FileResponse(
-        path=file_path,
-        media_type=attachment.mime_type,
-        filename=attachment.original_name,
-        headers={"Content-Disposition": f'inline; filename="{attachment.original_name}"'},
-    )
 
 
 @router.delete(
@@ -201,7 +218,6 @@ async def preview_file(
 async def delete_file(
     attachment: Attachment = Depends(require_delete_permission),
     session: Session = Depends(get_session),
-    storage: FileStorageEngine = Depends(get_storage_engine),
 ):
     """
     Delete a file.
@@ -210,6 +226,7 @@ async def delete_file(
 
     - **attachment_id**: UUID of the attachment
     """
+    storage = get_storage_engine_for_attachment(attachment.storage_config_id)
     storage.delete_file(attachment.storage_path)
     crud.delete_attachment(session, attachment)
     return None

@@ -3,6 +3,7 @@
 import os
 import uuid
 from datetime import datetime
+from typing import Optional
 
 from sqlmodel import Field, SQLModel
 
@@ -33,6 +34,12 @@ class Attachment(SQLModel, table=True):
     size: int
     owner_id: str = Field(max_length=100, index=True)
     is_public: bool = Field(default=False, index=True)
+    storage_config_id: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        index=True,
+        description="S3存储配置的唯一标识，为空表示使用本地存储或系统默认配置",
+    )
     created_at: datetime = Field(default_factory=datetime.now, index=True)
 
     def to_file_metadata(self) -> FileMetadata:
@@ -58,3 +65,4 @@ class AttachmentCreate(SQLModel):
     size: int
     owner_id: str
     is_public: bool = False
+    storage_config_id: Optional[str] = None

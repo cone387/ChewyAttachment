@@ -114,10 +114,15 @@ class AttachmentViewSet(viewsets.ModelViewSet):
             Q(owner_id=str(user.id)) | Q(is_public=True)
         )
 
-    def get_storage_engine(self):
-        """Get storage engine instance"""
-        from .storage import get_storage_engine
-        return get_storage_engine()
+    def get_storage_engine(self, storage_config_id=None):
+        """Get storage engine instance for reading/downloading"""
+        from .storage import get_storage_engine_for_attachment
+        return get_storage_engine_for_attachment(storage_config_id)
+
+    def get_storage_engine_for_upload(self, storage_config_id=None):
+        """Get storage engine instance for uploading"""
+        from .storage import get_storage_engine_for_upload
+        return get_storage_engine_for_upload(storage_config_id)
 
     def create(self, request, *args, **kwargs):
         """Handle file upload"""
@@ -126,11 +131,12 @@ class AttachmentViewSet(viewsets.ModelViewSet):
 
         uploaded_file = serializer.validated_data["file"]
         is_public = serializer.validated_data.get("is_public", False)
+        storage_config_id = serializer.validated_data.get("storage_config_id")
 
         content = uploaded_file.read()
         original_name = uploaded_file.name
 
-        storage = self.get_storage_engine()
+        storage, actual_config_id = self.get_storage_engine_for_upload(storage_config_id)
         result = storage.save_file(content, original_name)
 
         Attachment = get_attachment_model()
@@ -142,6 +148,7 @@ class AttachmentViewSet(viewsets.ModelViewSet):
             size=result.size,
             owner_id=str(request.user.id),
             is_public=is_public,
+            storage_config_id=actual_config_id,
         )
 
         output_serializer = AttachmentSerializer(attachment, context={'request': request})
@@ -157,7 +164,7 @@ class AttachmentViewSet(viewsets.ModelViewSet):
         """Delete file"""
         instance = self.get_object()
 
-        storage = self.get_storage_engine()
+        storage = self.get_storage_engine(instance.storage_config_id)
         storage.delete_file(instance.storage_path)
 
         instance.delete()
@@ -177,12 +184,17 @@ class AttachmentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        storage = self.get_storage_engine()
+        storage = self.get_storage_engine(instance.storage_config_id)
 
         try:
             # Check if this is a cloud storage that supports direct URLs
             if hasattr(storage, 'get_file_url') and hasattr(storage, 'storage') and hasattr(storage.storage, 'url'):
                 # For django-storages cloud backends, redirect to signed URL
+                file_url = storage.get_file_url(instance.storage_path)
+                from django.http import HttpResponseRedirect
+                return HttpResponseRedirect(file_url)
+            elif hasattr(storage, 's3_client'):
+                # For S3StorageEngine, redirect to pre-signed URL
                 file_url = storage.get_file_url(instance.storage_path)
                 from django.http import HttpResponseRedirect
                 return HttpResponseRedirect(file_url)
@@ -213,12 +225,17 @@ class AttachmentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        storage = self.get_storage_engine()
+        storage = self.get_storage_engine(instance.storage_config_id)
 
         try:
             # Check if this is a cloud storage that supports direct URLs
-            if hasattr(storage, 'get_file_url') and hasattr(storage.storage, 'url'):
+            if hasattr(storage, 'get_file_url') and hasattr(storage, 'storage') and hasattr(storage.storage, 'url'):
                 # For django-storages cloud backends, redirect to signed URL
+                file_url = storage.get_file_url(instance.storage_path)
+                from django.http import HttpResponseRedirect
+                return HttpResponseRedirect(file_url)
+            elif hasattr(storage, 's3_client'):
+                # For S3StorageEngine, redirect to pre-signed URL
                 file_url = storage.get_file_url(instance.storage_path)
                 from django.http import HttpResponseRedirect
                 return HttpResponseRedirect(file_url)

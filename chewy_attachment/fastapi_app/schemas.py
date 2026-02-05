@@ -15,6 +15,7 @@ class AttachmentResponse(BaseModel):
     size: int
     owner_id: str
     is_public: bool
+    storage_config_id: Optional[str] = None
     created_at: datetime
     preview_url: Optional[str] = None
 
@@ -34,6 +35,10 @@ class AttachmentUploadForm(BaseModel):
     """Form data for file upload (excluding file itself)"""
 
     is_public: bool = False
+    storage_config_id: Optional[str] = Field(
+        default=None,
+        description="S3存储配置ID，不传则使用系统默认配置",
+    )
 
 
 class ErrorResponse(BaseModel):

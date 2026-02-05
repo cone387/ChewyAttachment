@@ -56,6 +56,14 @@ class AttachmentBase(models.Model):
         verbose_name="公开访问",
         help_text="公开文件可被任何人访问",
     )
+    storage_config_id = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="存储配置ID",
+        help_text="S3存储配置的唯一标识，为空表示使用本地存储或系统默认配置",
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         db_index=True,

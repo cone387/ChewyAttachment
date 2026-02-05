@@ -8,15 +8,24 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from ..core.permissions import PermissionChecker
 from ..core.schemas import UserContext
-from ..core.storage import FileStorageEngine
+from ..core.storage import (
+    BaseStorageEngine,
+    FileStorageEngine,
+    StorageManager,
+    StorageConfigProvider,
+)
 from .crud import get_attachment
 from .models import Attachment
 
 _engine = None
 _storage_root: Optional[Path] = None
+_storage_config_provider: Optional[StorageConfigProvider] = None
 
-
-def configure(database_url: str, storage_root: str | Path) -> None:
+def configure(
+    database_url: str,
+    storage_root: str | Path,
+    storage_config_provider: Optional[StorageConfigProvider] = None,
+) -> None:
     """
     Configure database and storage for the FastAPI app.
 
@@ -24,14 +33,23 @@ def configure(database_url: str, storage_root: str | Path) -> None:
 
     Args:
         database_url: SQLAlchemy database URL
-        storage_root: Root directory for file storage
+        storage_root: Root directory for file storage (fallback for local storage)
+        storage_config_provider: Optional custom storage configuration provider
+                                for multi-S3 storage support
     """
-    global _engine, _storage_root
+    global _engine, _storage_root, _storage_config_provider
 
     _engine = create_engine(database_url, echo=False)
     SQLModel.metadata.create_all(_engine)
     _storage_root = Path(storage_root)
-
+    _storage_config_provider = storage_config_provider
+    
+    # Configure StorageManager singleton
+    manager = StorageManager(
+        provider=storage_config_provider,
+        local_storage_root=_storage_root,
+    )
+    StorageManager.set_instance(manager)
 
 def get_engine():
     """Get database engine"""
@@ -54,18 +72,57 @@ def get_session() -> Generator[Session, None, None]:
         yield session
 
 
-def get_storage_engine() -> FileStorageEngine:
+def get_storage_engine() -> BaseStorageEngine:
     """
-    Get storage engine dependency.
+    Get default storage engine dependency.
 
     Returns:
-        FileStorageEngine instance
+        BaseStorageEngine instance (FileStorageEngine or S3StorageEngine)
     """
     if _storage_root is None:
         raise RuntimeError(
             "Storage not configured. Call configure() first."
         )
-    return FileStorageEngine(_storage_root)
+    
+    manager = StorageManager.get_instance()
+    return manager.get_default_engine()
+
+
+def get_storage_engine_for_attachment(storage_config_id: Optional[str] = None) -> BaseStorageEngine:
+    """
+    Get storage engine for a specific attachment based on its storage_config_id.
+    
+    Args:
+        storage_config_id: The storage configuration ID from the attachment.
+                          If None, returns the default storage engine.
+    
+    Returns:
+        BaseStorageEngine: Storage engine for the attachment
+    """
+    manager = StorageManager.get_instance()
+    
+    if storage_config_id:
+        return manager.get_engine(storage_config_id)
+    else:
+        return manager.get_default_engine()
+
+
+def get_storage_engine_for_upload(
+    storage_config_id: Optional[str] = None,
+) -> tuple[BaseStorageEngine, Optional[str]]:
+    """
+    Get storage engine for uploading a new attachment.
+    
+    Args:
+        storage_config_id: Optional storage configuration ID to use.
+                          If None, uses the default configuration.
+    
+    Returns:
+        Tuple of (storage_engine, config_id_to_store)
+        - config_id_to_store may be None for local storage
+    """
+    manager = StorageManager.get_instance()
+    return manager.get_engine_for_attachment(storage_config_id)
 
 
 def get_current_user(request: Request) -> UserContext:
