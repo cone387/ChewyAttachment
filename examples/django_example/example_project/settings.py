@@ -80,11 +80,6 @@ REST_FRAMEWORK = {
 
 CHEWY_ATTACHMENT = {
     "STORAGE_ROOT": BASE_DIR / "media" / "attachments",
-    # Optional: Custom table name (default: "chewy_attachments")
-    # "TABLE_NAME": "my_custom_attachments",
-    # Optional: Custom permission classes
-    # "PERMISSION_CLASSES": [
-    #     "chewy_attachment.django_app.permissions.IsAuthenticatedForUpload",
-    #     "chewy_attachment.django_app.permissions.IsOwnerOrPublicReadOnly",
-    # ],
+    # 使用自定义的多 S3 存储配置提供者
+    "STORAGE_CONFIG_PROVIDER": "example_project.storage_provider.DualMinioProvider",
 }
