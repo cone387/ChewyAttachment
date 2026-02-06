@@ -1,17 +1,21 @@
 """DRF views for ChewyAttachment"""
 
 from django.conf import settings
+from django.db import connection
+from django.db.models import Sum, Count
 from django.http import FileResponse, Http404
 
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from ..core.permissions import PermissionChecker, load_permission_class
 from ..core.storage import FileStorageEngine
 from ..core.utils import generate_uuid
+from .. import __version__
 from django.apps import apps
 from .models import Attachment, get_storage_root
 from .permissions import IsAuthenticatedForUpload, IsOwnerOrPublicReadOnly
@@ -114,10 +118,15 @@ class AttachmentViewSet(viewsets.ModelViewSet):
             Q(owner_id=str(user.id)) | Q(is_public=True)
         )
 
-    def get_storage_engine(self):
-        """Get storage engine instance"""
-        from .storage import get_storage_engine
-        return get_storage_engine()
+    def get_storage_engine(self, storage_config_id=None):
+        """Get storage engine instance for reading/downloading"""
+        from .storage import get_storage_engine_for_attachment
+        return get_storage_engine_for_attachment(storage_config_id)
+
+    def get_storage_engine_for_upload(self, storage_config_id=None):
+        """Get storage engine instance for uploading"""
+        from .storage import get_storage_engine_for_upload
+        return get_storage_engine_for_upload(storage_config_id)
 
     def create(self, request, *args, **kwargs):
         """Handle file upload"""
@@ -126,11 +135,12 @@ class AttachmentViewSet(viewsets.ModelViewSet):
 
         uploaded_file = serializer.validated_data["file"]
         is_public = serializer.validated_data.get("is_public", False)
+        storage_config_id = serializer.validated_data.get("storage_config_id")
 
         content = uploaded_file.read()
         original_name = uploaded_file.name
 
-        storage = self.get_storage_engine()
+        storage, actual_config_id = self.get_storage_engine_for_upload(storage_config_id)
         result = storage.save_file(content, original_name)
 
         Attachment = get_attachment_model()
@@ -142,6 +152,7 @@ class AttachmentViewSet(viewsets.ModelViewSet):
             size=result.size,
             owner_id=str(request.user.id),
             is_public=is_public,
+            storage_config_id=actual_config_id,
         )
 
         output_serializer = AttachmentSerializer(attachment, context={'request': request})
@@ -157,7 +168,7 @@ class AttachmentViewSet(viewsets.ModelViewSet):
         """Delete file"""
         instance = self.get_object()
 
-        storage = self.get_storage_engine()
+        storage = self.get_storage_engine(instance.storage_config_id)
         storage.delete_file(instance.storage_path)
 
         instance.delete()
@@ -177,12 +188,17 @@ class AttachmentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        storage = self.get_storage_engine()
+        storage = self.get_storage_engine(instance.storage_config_id)
 
         try:
             # Check if this is a cloud storage that supports direct URLs
             if hasattr(storage, 'get_file_url') and hasattr(storage, 'storage') and hasattr(storage.storage, 'url'):
                 # For django-storages cloud backends, redirect to signed URL
+                file_url = storage.get_file_url(instance.storage_path)
+                from django.http import HttpResponseRedirect
+                return HttpResponseRedirect(file_url)
+            elif hasattr(storage, 's3_client'):
+                # For S3StorageEngine, redirect to pre-signed URL
                 file_url = storage.get_file_url(instance.storage_path)
                 from django.http import HttpResponseRedirect
                 return HttpResponseRedirect(file_url)
@@ -213,12 +229,17 @@ class AttachmentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        storage = self.get_storage_engine()
+        storage = self.get_storage_engine(instance.storage_config_id)
 
         try:
             # Check if this is a cloud storage that supports direct URLs
-            if hasattr(storage, 'get_file_url') and hasattr(storage.storage, 'url'):
+            if hasattr(storage, 'get_file_url') and hasattr(storage, 'storage') and hasattr(storage.storage, 'url'):
                 # For django-storages cloud backends, redirect to signed URL
+                file_url = storage.get_file_url(instance.storage_path)
+                from django.http import HttpResponseRedirect
+                return HttpResponseRedirect(file_url)
+            elif hasattr(storage, 's3_client'):
+                # For S3StorageEngine, redirect to pre-signed URL
                 file_url = storage.get_file_url(instance.storage_path)
                 from django.http import HttpResponseRedirect
                 return HttpResponseRedirect(file_url)
@@ -288,3 +309,223 @@ class AttachmentDownloadView(APIView):
         response["Content-Disposition"] = f'attachment; filename="{attachment.original_name}"'
         response["Content-Length"] = attachment.size
         return response
+
+
+class HealthCheckView(APIView):
+    """
+    Health check endpoint for ChewyAttachment.
+    
+    Returns the health status of the service including:
+    - Database connectivity
+    - Storage engine availability
+    - Version information
+    
+    GET /health/
+    """
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        """Perform health check"""
+        health_status = {
+            "status": "healthy",
+            "version": __version__,
+            "checks": {},
+        }
+        
+        # Check database connectivity
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+            health_status["checks"]["database"] = {
+                "status": "healthy",
+                "message": "Database connection successful",
+            }
+        except Exception as e:
+            health_status["status"] = "unhealthy"
+            health_status["checks"]["database"] = {
+                "status": "unhealthy",
+                "message": str(e),
+            }
+        
+        # Check storage engine
+        try:
+            from .storage import get_storage_engine
+            storage = get_storage_engine()
+            storage_type = type(storage).__name__
+            health_status["checks"]["storage"] = {
+                "status": "healthy",
+                "type": storage_type,
+                "message": "Storage engine initialized",
+            }
+        except Exception as e:
+            health_status["status"] = "unhealthy"
+            health_status["checks"]["storage"] = {
+                "status": "unhealthy",
+                "message": str(e),
+            }
+        
+        # Return appropriate status code
+        status_code = status.HTTP_200_OK if health_status["status"] == "healthy" else status.HTTP_503_SERVICE_UNAVAILABLE
+        return Response(health_status, status=status_code)
+
+
+class StorageStatsView(APIView):
+    """
+    Storage statistics endpoint for ChewyAttachment.
+    
+    Returns storage usage statistics:
+    - For authenticated users: their own storage stats
+    - For admin users: global stats (if requested)
+    
+    GET /stats/
+    GET /stats/?global=true  (admin only)
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        """Get storage statistics"""
+        user = request.user
+        Attachment = get_attachment_model()
+        
+        # Check if global stats requested (admin only)
+        show_global = request.query_params.get("global", "").lower() == "true"
+        
+        if show_global and user.is_staff:
+            # Global statistics for admin
+            stats = self._get_global_stats(Attachment)
+        else:
+            # User's own statistics
+            stats = self._get_user_stats(Attachment, str(user.id))
+        
+        return Response(stats)
+    
+    def _get_user_stats(self, Attachment, user_id: str) -> dict:
+        """Get statistics for a specific user"""
+        queryset = Attachment.objects.filter(owner_id=user_id)
+        
+        aggregation = queryset.aggregate(
+            total_files=Count("id"),
+            total_size=Sum("size"),
+        )
+        
+        # Get breakdown by MIME type
+        mime_breakdown = (
+            queryset.values("mime_type")
+            .annotate(count=Count("id"), size=Sum("size"))
+            .order_by("-size")[:10]
+        )
+        
+        # Get breakdown by storage config
+        storage_breakdown = (
+            queryset.values("storage_config_id")
+            .annotate(count=Count("id"), size=Sum("size"))
+            .order_by("-size")
+        )
+        
+        return {
+            "scope": "user",
+            "user_id": user_id,
+            "total_files": aggregation["total_files"] or 0,
+            "total_size": aggregation["total_size"] or 0,
+            "total_size_human": self._format_size(aggregation["total_size"] or 0),
+            "by_mime_type": [
+                {
+                    "mime_type": item["mime_type"],
+                    "count": item["count"],
+                    "size": item["size"] or 0,
+                    "size_human": self._format_size(item["size"] or 0),
+                }
+                for item in mime_breakdown
+            ],
+            "by_storage": [
+                {
+                    "storage_config_id": item["storage_config_id"] or "local",
+                    "count": item["count"],
+                    "size": item["size"] or 0,
+                    "size_human": self._format_size(item["size"] or 0),
+                }
+                for item in storage_breakdown
+            ],
+        }
+    
+    def _get_global_stats(self, Attachment) -> dict:
+        """Get global statistics (admin only)"""
+        queryset = Attachment.objects.all()
+        
+        aggregation = queryset.aggregate(
+            total_files=Count("id"),
+            total_size=Sum("size"),
+            total_users=Count("owner_id", distinct=True),
+        )
+        
+        # Get breakdown by MIME type
+        mime_breakdown = (
+            queryset.values("mime_type")
+            .annotate(count=Count("id"), size=Sum("size"))
+            .order_by("-size")[:10]
+        )
+        
+        # Get breakdown by storage config
+        storage_breakdown = (
+            queryset.values("storage_config_id")
+            .annotate(count=Count("id"), size=Sum("size"))
+            .order_by("-size")
+        )
+        
+        # Get top users by storage
+        top_users = (
+            queryset.values("owner_id")
+            .annotate(count=Count("id"), size=Sum("size"))
+            .order_by("-size")[:10]
+        )
+        
+        return {
+            "scope": "global",
+            "total_files": aggregation["total_files"] or 0,
+            "total_size": aggregation["total_size"] or 0,
+            "total_size_human": self._format_size(aggregation["total_size"] or 0),
+            "total_users": aggregation["total_users"] or 0,
+            "by_mime_type": [
+                {
+                    "mime_type": item["mime_type"],
+                    "count": item["count"],
+                    "size": item["size"] or 0,
+                    "size_human": self._format_size(item["size"] or 0),
+                }
+                for item in mime_breakdown
+            ],
+            "by_storage": [
+                {
+                    "storage_config_id": item["storage_config_id"] or "local",
+                    "count": item["count"],
+                    "size": item["size"] or 0,
+                    "size_human": self._format_size(item["size"] or 0),
+                }
+                for item in storage_breakdown
+            ],
+            "top_users": [
+                {
+                    "owner_id": item["owner_id"],
+                    "count": item["count"],
+                    "size": item["size"] or 0,
+                    "size_human": self._format_size(item["size"] or 0),
+                }
+                for item in top_users
+            ],
+        }
+    
+    @staticmethod
+    def _format_size(size_bytes: int) -> str:
+        """Format bytes to human readable string"""
+        if size_bytes == 0:
+            return "0 B"
+        
+        units = ["B", "KB", "MB", "GB", "TB"]
+        unit_index = 0
+        size = float(size_bytes)
+        
+        while size >= 1024 and unit_index < len(units) - 1:
+            size /= 1024
+            unit_index += 1
+        
+        return f"{size:.2f} {units[unit_index]}"

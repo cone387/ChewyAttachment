@@ -14,7 +14,9 @@ ChewyAttachment 是一个通用的文件/附件管理插件，提供开箱即用
 ## ✨ 核心特性
 
 - 🔄 **双框架支持**: 同时支持 Django 和 FastAPI
-- ☁️ **多存储支持**: 本地文件存储 + AWS S3 云存储（通过 django-storages）
+- ☁️ **多存储支持**: 本地文件存储 + AWS S3 云存储（支持 MinIO、阿里云 OSS 等 S3 兼容服务）
+- 🔀 **多 S3 配置**: 支持动态切换多个 S3 存储配置，不同用户/附件可使用不同存储
+- 🔄 **数据迁移**: 支持在不同存储配置之间迁移文件，用户切换存储后可同步历史数据
 - 🗄️ **数据库灵活**: Django 自动使用项目默认数据库，FastAPI 支持任意 SQLAlchemy 兼容数据库
 - 📁 **存储灵活**: 默认存储在 media/attachments 目录，可自定义路径
 - 📁 **完整功能**: 文件上传、下载、删除、列表查询
@@ -24,6 +26,8 @@ ChewyAttachment 是一个通用的文件/附件管理插件，提供开箱即用
 - 🗄️ **轻量存储**: 数据库仅存元信息，文件存储于本地文件系统或云存储
 - 🔌 **即插即用**: 独立于具体业务表的通用数据模型
 - 🎨 **RESTful API**: 标准化的 API 设计
+- 💚 **健康检查**: 内置健康检查接口，监控数据库和存储状态
+- 📊 **存储统计**: 提供存储使用量统计接口
 
 ## 📦 安装
 
@@ -241,6 +245,58 @@ GET /api/attachments/files/{attachment_id}/content/
 
 ```bash
 DELETE /api/attachments/files/{attachment_id}/
+```
+
+#### 健康检查
+
+```bash
+GET /api/attachments/health/
+```
+
+检查服务健康状态，包括数据库连接和存储引擎状态。
+
+**返回示例:**
+```json
+{
+  "status": "healthy",
+  "version": "0.5.0",
+  "checks": {
+    "database": {
+      "status": "healthy",
+      "message": "Database connection successful"
+    },
+    "storage": {
+      "status": "healthy",
+      "type": "FileStorageEngine",
+      "message": "Storage engine initialized"
+    }
+  }
+}
+```
+
+#### 存储统计
+
+```bash
+GET /api/attachments/stats/
+```
+
+获取当前用户的存储使用统计。管理员可添加 `?global=true` 查看全局统计。
+
+**返回示例:**
+```json
+{
+  "scope": "user",
+  "user_id": "123",
+  "total_files": 42,
+  "total_size": 104857600,
+  "total_size_human": "100.00 MB",
+  "by_mime_type": [
+    {"mime_type": "image/jpeg", "count": 20, "size": 52428800, "size_human": "50.00 MB"}
+  ],
+  "by_storage": [
+    {"storage_config_id": "local", "count": 42, "size": 104857600, "size_human": "100.00 MB"}
+  ]
+}
 ```
 
 ### FastAPI API
@@ -550,14 +606,25 @@ ChewyAttachment/
 
 ```bash
 # 安装测试依赖
-pip install pytest pytest-django pytest-asyncio
+pip install chewy-attachment[dev]
 
-# 运行 Django 测试
-pytest chewy_attachment/django_app/tests/
+# 运行所有测试
+pytest tests/ -v
 
-# 运行 FastAPI 测试
-pytest chewy_attachment/fastapi_app/tests/
+# 运行并显示覆盖率
+pytest tests/ --cov=chewy_attachment --cov-report=html
+
+# 运行特定模块测试
+pytest tests/test_core/ -v
 ```
+
+详细测试指南请参阅 [docs/TESTING.md](docs/TESTING.md)。
+
+## 📖 更多文档
+
+- [S3 存储配置指南](docs/S3_STORAGE.md) - 单一 S3 存储配置
+- [多 S3 存储配置](docs/MULTI_S3_STORAGE.md) - 多存储配置、动态切换、数据迁移
+- [测试指南](docs/TESTING.md) - 测试框架和示例
 
 ## 📝 示例代码
 

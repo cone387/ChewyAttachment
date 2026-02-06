@@ -30,6 +30,7 @@ class AttachmentSerializer(serializers.ModelSerializer):
             "size",
             "owner_id",
             "is_public",
+            "storage_config_id",
             "created_at",
             "preview_url",
             "download_url",
@@ -57,8 +58,8 @@ class AttachmentSerializer(serializers.ModelSerializer):
         For local storage, returns the download URL.
         """
         try:
-            from .storage import get_storage_engine
-            storage = get_storage_engine()
+            from .storage import get_storage_engine_for_attachment
+            storage = get_storage_engine_for_attachment(obj.storage_config_id)
             
             # For cloud storage with direct URL support
             if hasattr(storage, 'get_file_url'):
@@ -83,6 +84,13 @@ class AttachmentUploadSerializer(serializers.Serializer):
 
     file = serializers.FileField(required=True)
     is_public = serializers.BooleanField(default=False, required=False)
+    storage_config_id = serializers.CharField(
+        max_length=100,
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        help_text="S3存储配置ID，不传则使用系统默认配置",
+    )
 
     def validate_file(self, value):
         """Validate uploaded file"""
