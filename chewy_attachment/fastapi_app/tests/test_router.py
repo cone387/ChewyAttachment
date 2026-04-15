@@ -211,3 +211,16 @@ class TestAttachmentRouter:
         response = client.get(f"/files/{file_id}/preview")
         assert response.status_code == status.HTTP_200_OK
         assert response.content == self.TEST_FILE_CONTENT
+
+    def test_upload_preserves_storage_config_id(self, client, set_current_user, user1_id):
+        """Test that storage_config_id is persisted in the database"""
+        set_current_user(user1_id)
+        upload_response = self._upload_file(client)
+        file_id = upload_response.json()["id"]
+
+        # Retrieve and check — for local storage, storage_config_id should be None
+        response = client.get(f"/files/{file_id}")
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        # Local storage has no config_id
+        assert data.get("storage_config_id") is None

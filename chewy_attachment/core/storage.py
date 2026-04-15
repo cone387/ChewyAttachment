@@ -359,6 +359,8 @@ class S3StorageEngine(BaseStorageEngine):
         self.bucket_name = bucket_name
         self.prefix = prefix.strip("/")
         self.public_read = public_read
+        self._endpoint_url = endpoint_url
+        self._region_name = region_name
         
         # Initialize S3 client
         session = boto3.Session(
@@ -481,12 +483,14 @@ class S3StorageEngine(BaseStorageEngine):
 
         if self.public_read:
             # For public files, return the direct URL
-            if hasattr(self.s3_client, '_endpoint') and self.s3_client._endpoint.host:
-                endpoint = self.s3_client._endpoint.host
-                return f"https://{endpoint}/{self.bucket_name}/{s3_key}"
+            endpoint_url = getattr(self, '_endpoint_url', None)
+            if endpoint_url:
+                # Custom endpoint (MinIO, etc.) — use it directly
+                base = endpoint_url.rstrip("/")
+                return f"{base}/{self.bucket_name}/{s3_key}"
             else:
                 # Standard AWS S3 URL
-                region = self.s3_client._client_config.region_name
+                region = self._region_name
                 if region == "us-east-1":
                     return f"https://{self.bucket_name}.s3.amazonaws.com/{s3_key}"
                 else:

@@ -170,26 +170,40 @@ class AttachmentAdmin(admin.ModelAdmin):
     def file_preview(self, obj):
         """Show thumbnail preview for images"""
         if obj.mime_type and obj.mime_type.startswith("image/"):
+            try:
+                from django.urls import reverse
+                preview_url = reverse('attachment-preview', kwargs={'pk': obj.id})
+            except Exception:
+                preview_url = f"/api/attachments/files/{obj.id}/preview/"
             return mark_safe(
-                f'<img src="/api/attachments/files/{obj.id}/preview/" '
+                f'<img src="{preview_url}" '
                 f'style="max-width: 50px; max-height: 50px; object-fit: cover; '
                 f'border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" '
                 f'onerror="this.outerHTML=&quot;<span style=&apos;color: red; font-size: 12px;&apos;>❌ 加载失败</span>&quot;" />'
             )
-        # Non-image files: show type info
-        return mark_safe(f'<span style="color: #999; font-size: 12px;">{obj.mime_type or "未知"}</span>')
+        return mark_safe(
+            f'<span style="color: #999; font-size: 12px;">'
+            f'{obj.mime_type or "未知"}</span>'
+        )
 
     @admin.display(description="文件预览")
     def file_preview_large(self, obj):
         """Show larger preview in detail view"""
         if obj.mime_type and obj.mime_type.startswith("image/"):
+            try:
+                from django.urls import reverse
+                preview_url = reverse('attachment-preview', kwargs={'pk': obj.id})
+            except Exception:
+                preview_url = f"/api/attachments/files/{obj.id}/preview/"
             mime_escaped = obj.mime_type.replace('"', '&quot;')
             return mark_safe(
                 f'<div style="text-align: center;">'
-                f'<img src="/api/attachments/files/{obj.id}/preview/" '
+                f'<img src="{preview_url}" '
                 f'style="max-width: 400px; max-height: 400px; object-fit: contain; '
                 f'border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);" '
-                f'onerror="this.outerHTML=&quot;<div style=&apos;color: red; padding: 40px; font-size: 16px;&apos;>❌ 图片加载失败<br/><small style=&apos;color: #999;&apos;>{mime_escaped}</small></div>&quot;" />'
+                f'onerror="this.outerHTML=&quot;<div style=&apos;color: red; padding: 40px;'
+                f' font-size: 16px;&apos;>❌ 图片加载失败<br/><small style=&apos;color: #999;'
+                f'&apos;>{mime_escaped}</small></div>&quot;" />'
                 f'</div>'
             )
         # Non-image files: show type info

@@ -27,6 +27,7 @@ def create_attachment(session: Session, data: AttachmentCreate) -> Attachment:
         size=data.size,
         owner_id=data.owner_id,
         is_public=data.is_public,
+        storage_config_id=data.storage_config_id,
     )
     session.add(attachment)
     session.commit()
