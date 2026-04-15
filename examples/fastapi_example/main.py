@@ -6,7 +6,8 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from chewy_attachment.fastapi_app import dependencies, router
+from chewy_attachment.fastapi_app import dependencies
+from chewy_attachment.fastapi_app.router import router, health_router
 
 BASE_DIR = Path(__file__).resolve().parent
 DATABASE_URL = f"sqlite:///{BASE_DIR}/attachments.db"
@@ -45,6 +46,7 @@ async def add_demo_user(request: Request, call_next):
 
 
 app.include_router(router, prefix="/api/attachments")
+app.include_router(health_router, prefix="/api/attachments")
 
 
 @app.get("/")

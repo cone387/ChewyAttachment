@@ -208,3 +208,178 @@ class TestAttachmentViews(TestCase):
         response = self.client.get("/api/attachments/files/00000000-0000-0000-0000-000000000000/")
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+@override_settings(CHEWY_ATTACHMENT={"STORAGE_ROOT": TEST_STORAGE})
+class TestHealthCheckView(TestCase):
+    """Tests for /health/ endpoint"""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        TEST_STORAGE.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        if TEST_STORAGE.exists():
+            shutil.rmtree(TEST_STORAGE)
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_health_check_returns_200(self):
+        """Health check returns 200 when everything is healthy"""
+        response = self.client.get("/api/attachments/health/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertEqual(data["status"], "healthy")
+        self.assertIn("version", data)
+        self.assertIn("database", data["checks"])
+        self.assertIn("storage", data["checks"])
+
+    def test_health_check_no_auth_required(self):
+        """Health check works without authentication"""
+        response = self.client.get("/api/attachments/health/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
+@override_settings(CHEWY_ATTACHMENT={"STORAGE_ROOT": TEST_STORAGE})
+class TestStorageStatsView(TestCase):
+    """Tests for /stats/ endpoint"""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        TEST_STORAGE.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        if TEST_STORAGE.exists():
+            shutil.rmtree(TEST_STORAGE)
+
+    def setUp(self):
+        self.client = APIClient()
+        User = get_user_model()
+        self.user = User.objects.create_user(username="statsuser", password="pass123")
+
+    def test_stats_requires_auth(self):
+        """Stats endpoint requires authentication"""
+        response = self.client.get("/api/attachments/stats/")
+        self.assertIn(response.status_code, [
+            status.HTTP_401_UNAUTHORIZED,
+            status.HTTP_403_FORBIDDEN,
+        ])
+
+    def test_stats_returns_user_scope(self):
+        """Stats returns user-scoped data for authenticated user"""
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get("/api/attachments/stats/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertEqual(data["scope"], "user")
+        self.assertEqual(data["user_id"], str(self.user.id))
+        self.assertEqual(data["total_files"], 0)
+        self.assertIn("by_mime_type", data)
+        self.assertIn("by_storage", data)
+
+    def test_stats_after_upload(self):
+        """Stats reflect uploaded files"""
+        self.client.force_authenticate(user=self.user)
+        f = io.BytesIO(b"hello world")
+        f.name = "test.txt"
+        self.client.post("/api/attachments/files/", {"file": f}, format="multipart")
+
+        response = self.client.get("/api/attachments/stats/")
+        data = response.json()
+        self.assertEqual(data["total_files"], 1)
+        self.assertGreater(data["total_size"], 0)
+
+
+@override_settings(CHEWY_ATTACHMENT={"STORAGE_ROOT": TEST_STORAGE})
+class TestPreviewAndListViews(TestCase):
+    """Tests for preview and list endpoints"""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        TEST_STORAGE.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        if TEST_STORAGE.exists():
+            shutil.rmtree(TEST_STORAGE)
+
+    def setUp(self):
+        self.client = APIClient()
+        User = get_user_model()
+        self.user = User.objects.create_user(username="previewuser", password="pass123")
+        self.content = b"preview test content"
+
+    def tearDown(self):
+        Attachment.objects.all().delete()
+
+    def _upload(self, is_public=False):
+        self.client.force_authenticate(user=self.user)
+        f = io.BytesIO(self.content)
+        f.name = "test.txt"
+        return self.client.post(
+            "/api/attachments/files/",
+            {"file": f, "is_public": is_public},
+            format="multipart",
+        )
+
+    def test_preview_by_owner(self):
+        """Owner can preview file inline"""
+        resp = self._upload()
+        file_id = resp.data["id"]
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(f"/api/attachments/files/{file_id}/preview/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(b"".join(response.streaming_content), self.content)
+
+    def test_preview_private_by_anonymous_fails(self):
+        """Anonymous cannot preview private file"""
+        resp = self._upload(is_public=False)
+        file_id = resp.data["id"]
+        self.client.force_authenticate(user=None)
+        response = self.client.get(f"/api/attachments/files/{file_id}/preview/")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_list_pagination(self):
+        """List endpoint supports pagination"""
+        for _ in range(3):
+            self._upload(is_public=True)
+        self.client.force_authenticate(user=None)
+        response = self.client.get("/api/attachments/files/?page_size=2")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 2)
+        self.assertEqual(response.data["count"], 3)
+
+    def test_upload_response_has_all_fields(self):
+        """Upload response contains all expected fields"""
+        resp = self._upload()
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        expected_fields = {
+            "id", "original_name", "mime_type", "size", "owner_id",
+            "is_public", "storage_config_id", "created_at",
+            "preview_url", "download_url", "file_url",
+        }
+        self.assertTrue(expected_fields.issubset(set(resp.data.keys())), 
+                        f"Missing fields: {expected_fields - set(resp.data.keys())}")
+
+    def test_delete_removes_physical_file(self):
+        """Deleting attachment also removes the physical file"""
+        resp = self._upload()
+        file_id = resp.data["id"]
+        attachment = Attachment.objects.get(pk=file_id)
+        storage_path = attachment.storage_path
+        full_path = TEST_STORAGE / storage_path
+        self.assertTrue(full_path.exists())
+
+        self.client.force_authenticate(user=self.user)
+        self.client.delete(f"/api/attachments/files/{file_id}/")
+        self.assertFalse(full_path.exists())
+        self.assertEqual(Attachment.objects.count(), 0)

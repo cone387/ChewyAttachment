@@ -12,7 +12,7 @@ from sqlmodel import Session, SQLModel, create_engine
 from chewy_attachment.core.schemas import UserContext
 from chewy_attachment.core.storage import StorageManager
 from chewy_attachment.fastapi_app import dependencies
-from chewy_attachment.fastapi_app.router import router
+from chewy_attachment.fastapi_app.router import router, health_router
 
 TEST_DIR = Path(__file__).parent.absolute()
 TEST_STORAGE = TEST_DIR / "test_storage"
@@ -79,6 +79,7 @@ def app(db_engine):
     StorageManager.set_instance(manager)
 
     test_app.include_router(router)
+    test_app.include_router(health_router)
 
     test_app.dependency_overrides[dependencies.get_current_user] = _get_test_current_user
 

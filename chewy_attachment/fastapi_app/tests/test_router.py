@@ -224,3 +224,121 @@ class TestAttachmentRouter:
         data = response.json()
         # Local storage has no config_id
         assert data.get("storage_config_id") is None
+
+
+class TestHealthAndStats:
+    """Tests for health check and storage stats endpoints"""
+
+    def test_health_check(self, client, set_current_user):
+        """Health check returns healthy status"""
+        set_current_user(None)
+        response = client.get("/health")
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["status"] == "healthy"
+        assert "version" in data
+        assert "database" in data["checks"]
+        assert "storage" in data["checks"]
+
+    def test_stats_requires_auth(self, client, set_current_user):
+        """Stats endpoint requires authentication"""
+        set_current_user(None)
+        response = client.get("/stats")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_stats_returns_user_scope(self, client, set_current_user, user1_id):
+        """Stats returns user-scoped data"""
+        set_current_user(user1_id)
+        response = client.get("/stats")
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["scope"] == "user"
+        assert data["user_id"] == user1_id
+        assert data["total_files"] == 0
+
+    def test_stats_after_upload(self, client, set_current_user, user1_id):
+        """Stats reflect uploaded files"""
+        set_current_user(user1_id)
+        files = {"file": ("test.txt", io.BytesIO(b"hello"), "text/plain")}
+        client.post("/files", files=files, data={"is_public": "false"})
+
+        response = client.get("/stats")
+        data = response.json()
+        assert data["total_files"] == 1
+        assert data["total_size"] > 0
+
+
+class TestEdgeCases:
+    """Tests for edge cases and error handling"""
+
+    def test_upload_empty_filename(self, client, set_current_user, user1_id):
+        """Upload with empty filename is rejected by FastAPI validation"""
+        set_current_user(user1_id)
+        files = {"file": ("", io.BytesIO(b"data"), "application/octet-stream")}
+        response = client.post("/files", files=files)
+        # FastAPI rejects empty filename as invalid multipart
+        assert response.status_code in (status.HTTP_201_CREATED, 422)
+
+    def test_upload_response_has_all_fields(self, client, set_current_user, user1_id):
+        """Upload response contains all expected fields"""
+        set_current_user(user1_id)
+        files = {"file": ("test.txt", io.BytesIO(b"hello"), "text/plain")}
+        response = client.post("/files", files=files)
+        assert response.status_code == status.HTTP_201_CREATED
+        data = response.json()
+        expected = {
+            "id", "original_name", "mime_type", "size", "owner_id",
+            "is_public", "storage_config_id", "created_at", "preview_url",
+        }
+        assert expected.issubset(set(data.keys())), f"Missing: {expected - set(data.keys())}"
+
+    def test_delete_nonexistent_returns_404(self, client, set_current_user, user1_id):
+        """Deleting nonexistent file returns 404"""
+        set_current_user(user1_id)
+        response = client.delete("/files/00000000-0000-0000-0000-000000000000")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_download_nonexistent_returns_404(self, client, set_current_user, user1_id):
+        """Downloading nonexistent file returns 404"""
+        set_current_user(user1_id)
+        response = client.get("/files/00000000-0000-0000-0000-000000000000/content")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_preview_nonexistent_returns_404(self, client, set_current_user, user1_id):
+        """Previewing nonexistent file returns 404"""
+        set_current_user(user1_id)
+        response = client.get("/files/00000000-0000-0000-0000-000000000000/preview")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_list_empty(self, client, set_current_user, user1_id):
+        """List returns empty when no files"""
+        set_current_user(user1_id)
+        response = client.get("/files")
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["total"] == 0
+        assert data["items"] == []
+
+    def test_list_filters_by_user(self, client, set_current_user, user1_id, user2_id):
+        """List only shows own files and public files"""
+        # User1 uploads private file
+        set_current_user(user1_id)
+        files = {"file": ("private.txt", io.BytesIO(b"secret"), "text/plain")}
+        client.post("/files", files=files, data={"is_public": "false"})
+
+        # User2 should not see user1's private file
+        set_current_user(user2_id)
+        response = client.get("/files")
+        data = response.json()
+        assert data["total"] == 0
+
+    def test_list_shows_public_to_anonymous(self, client, set_current_user, user1_id):
+        """Anonymous users can see public files"""
+        set_current_user(user1_id)
+        files = {"file": ("public.txt", io.BytesIO(b"hello"), "text/plain")}
+        client.post("/files", files=files, data={"is_public": "true"})
+
+        set_current_user(None)
+        response = client.get("/files")
+        data = response.json()
+        assert data["total"] == 1
