@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-04-15
+
+### Fixed
+- **CRITICAL**: FastAPI `create_attachment()` did not persist `storage_config_id` — files uploaded to S3 lost their storage config, causing 404 on download
+- **MEDIUM**: `S3StorageEngine.get_file_url()` produced malformed URLs for custom endpoints (MinIO) — accessed boto3 private attributes, now stores endpoint_url/region_name directly
+- **MEDIUM**: Django admin preview URLs were hardcoded `/api/attachments/...` — now uses `reverse()` with fallback
+- **MEDIUM**: `file_url` in API response returned raw storage path (`2026/04/15/uuid.txt`) for local storage instead of a usable download URL
+- FastAPI example missing `health_router` mount — health/stats endpoints returned 404
+- Django S3 example `settings.py` in wrong directory — demo couldn't start
+- Django basic example had unnecessary MinIO `STORAGE_CONFIG_PROVIDER` config
+- `__init__.py` fallback version was stale
+
+### Added
+- 32 new tests (108 total): health check, stats, preview, pagination, edge cases, StorageManager
+- End-to-end validation: 22 tests across Django (12) and FastAPI (10) examples
+- GitHub Actions CI/CD workflows (lint + test matrix + PyPI publish)
+
+### Changed
+- `AttachmentSerializer.get_file_url()` now returns `download_url` for local storage, direct/signed URL only for cloud storage
+
 ## [0.5.1] - 2026-04-15
 
 ### Fixed
