@@ -290,11 +290,7 @@ class DjangoStorageEngine(BaseStorageEngine):
 
     def get_file_url(self, storage_path: str, expires_in: Optional[int] = None) -> str:
         """Get file URL using Django storage backend"""
-        if not self.file_exists(storage_path):
-            raise StorageException(f"File not found: {storage_path}")
-
         try:
-            # For django-storages S3, this will generate signed URLs if configured
             return self.storage.url(storage_path)
         except Exception as e:
             raise StorageException(f"Failed to generate file URL: {e}")
@@ -482,9 +478,6 @@ class S3StorageEngine(BaseStorageEngine):
             Pre-signed URL for private files or public URL for public files
         """
         s3_key = self._get_s3_key(storage_path)
-
-        if not self.file_exists(storage_path):
-            raise StorageException(f"File not found: {storage_path}")
 
         if self.public_read:
             # For public files, return the direct URL

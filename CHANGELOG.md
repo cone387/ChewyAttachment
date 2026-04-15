@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-04-15
+
+### Fixed
+- Remove redundant `file_exists()` call in `DjangoStorageEngine.get_file_url()` — eliminates extra S3 HEAD request per URL generation
+- Remove redundant `file_exists()` call in `S3StorageEngine.get_file_url()` — signed URLs have their own expiry, no need to pre-check
+- Add `le=10000` upper bound to FastAPI `page` query parameter — prevents extreme offset queries
+
+### Added
+- **MIME content validation** (`VALIDATE_MIME_CONTENT` setting) — detects executable content disguised as safe file types (e.g. ELF binary renamed to .jpg)
+- **GitHub Actions CI/CD** — lint + test matrix (Python 3.10-3.13) on push/PR, auto-publish to PyPI on tag
+- New test suite for serializer validation (6 tests)
+- FastAPI pagination boundary tests (3 tests) and preview endpoint test
+
+### Changed
+- Total test count: 75 (up from 65)
+
 ## [0.5.0] - 2026-01-21
 
 ### Added

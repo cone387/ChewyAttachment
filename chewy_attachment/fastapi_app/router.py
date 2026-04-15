@@ -45,7 +45,7 @@ def _add_preview_url(attachment: Attachment, request: Request) -> AttachmentResp
 )
 async def list_files(
     request: Request,
-    page: int = Query(1, ge=1, description="Page number"),
+    page: int = Query(1, ge=1, le=10000, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     session: Session = Depends(get_session),
     user: Optional[UserContext] = Depends(get_current_user_optional),

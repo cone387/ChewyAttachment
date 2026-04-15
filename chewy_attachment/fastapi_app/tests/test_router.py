@@ -180,3 +180,34 @@ class TestAttachmentRouter:
         response = client.get("/files/00000000-0000-0000-0000-000000000000")
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_list_files_page_upper_bound(self, client, set_current_user, user1_id):
+        """Test page parameter rejects values above 10000"""
+        set_current_user(user1_id)
+        response = client.get("/files?page=10001")
+        assert response.status_code == 422
+
+    def test_list_files_page_lower_bound(self, client, set_current_user, user1_id):
+        """Test page parameter rejects zero"""
+        set_current_user(user1_id)
+        response = client.get("/files?page=0")
+        assert response.status_code == 422
+
+    def test_list_files_valid_pagination(self, client, set_current_user, user1_id):
+        """Test valid pagination parameters work"""
+        set_current_user(user1_id)
+        response = client.get("/files?page=1&page_size=10")
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["page"] == 1
+        assert data["page_size"] == 10
+
+    def test_preview_file_by_owner(self, client, set_current_user, user1_id):
+        """Test owner can preview file inline"""
+        set_current_user(user1_id)
+        upload_response = self._upload_file(client)
+        file_id = upload_response.json()["id"]
+
+        response = client.get(f"/files/{file_id}/preview")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.content == self.TEST_FILE_CONTENT

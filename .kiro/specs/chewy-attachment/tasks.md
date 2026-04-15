@@ -57,20 +57,21 @@
 
 ## 待办 📋
 
-### Phase 4: 质量提升
-- [ ] Task 46: 补充核心模块单元测试 — StorageManager, StorageMigrator, S3StorageEngine
-- [ ] Task 47: 补充 Django 集成测试 — 云存储判断、存储配置切换
-- [ ] Task 48: 补充安全测试 — 路径遍历、恶意文件名、权限绕过
-- [ ] Task 49: FastAPI page 参数加上限 (le=10000)
-- [ ] Task 50: DjangoStorageEngine.get_file_url() 去掉多余的 file_exists() 调用
-- [ ] Task 51: S3StorageEngine.get_file_url() 去掉多余的 file_exists() 调用
-- [ ] Task 52: 添加 CI/CD — GitHub Actions (lint + test + publish)
+### Phase 4: 质量提升 (v0.5.1)
+- [x] Task 46: DjangoStorageEngine.get_file_url() 去掉多余的 file_exists() 调用
+- [x] Task 47: S3StorageEngine.get_file_url() 去掉多余的 file_exists() 调用
+- [x] Task 48: FastAPI page 参数加上限 (le=10000)
+- [x] Task 49: 文件内容 MIME 校验 — VALIDATE_MIME_CONTENT 配置项
+- [x] Task 50: GitHub Actions CI/CD — lint + test + publish
+- [x] Task 51: 补充 serializer 验证测试 (6 tests)
+- [x] Task 52: 补充 FastAPI 分页边界和 preview 测试 (4 tests)
 
-### Phase 5: 功能增强 (未来)
-- [ ] Task 53: 文件内容 MIME 校验 — 对比扩展名和实际内容
-- [ ] Task 54: 批量上传/删除接口
-- [ ] Task 55: 文件去重 — 基于内容哈希
-- [ ] Task 56: 异步文件操作 — Django async views
-- [ ] Task 57: 缩略图生成 — 图片自动生成缩略图
-- [ ] Task 58: Webhook 通知 — 文件上传/删除事件回调
-- [ ] Task 59: 速率限制 — 上传/下载频率控制
+### Phase 5: 功能增强 (v0.6.0)
+- [ ] Task 53: 补充核心模块单元测试 — StorageManager, StorageMigrator, S3StorageEngine
+- [ ] Task 54: 补充安全测试 — 路径遍历、恶意文件名、权限绕过
+- [ ] Task 55: 批量上传/删除接口
+- [ ] Task 56: 文件去重 — 基于内容哈希
+- [ ] Task 57: 异步文件操作 — Django async views
+- [ ] Task 58: 缩略图生成 — 图片自动生成缩略图
+- [ ] Task 59: Webhook 通知 — 文件上传/删除事件回调
+- [ ] Task 60: 速率限制 — 上传/下载频率控制

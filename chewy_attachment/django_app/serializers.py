@@ -96,16 +96,16 @@ class AttachmentUploadSerializer(serializers.Serializer):
         """Validate uploaded file"""
         if not value:
             raise serializers.ValidationError("No file provided")
-        
-        # Check file size limit
+
         chewy_settings = getattr(settings, "CHEWY_ATTACHMENT", {})
+
+        # Check file size limit
         max_size = chewy_settings.get("MAX_FILE_SIZE", 10 * 1024 * 1024)  # 10MB default
-        
         if value.size > max_size:
             raise serializers.ValidationError(
                 f"File size ({value.size} bytes) exceeds maximum allowed size ({max_size} bytes)"
             )
-        
+
         # Check allowed extensions
         allowed_extensions = chewy_settings.get("ALLOWED_EXTENSIONS")
         if allowed_extensions:
@@ -116,5 +116,46 @@ class AttachmentUploadSerializer(serializers.Serializer):
                     f"File extension '{file_ext}' is not allowed. "
                     f"Allowed extensions: {', '.join(allowed_extensions)}"
                 )
-        
+
+        # Validate MIME type matches file content (prevent extension spoofing)
+        if chewy_settings.get("VALIDATE_MIME_CONTENT", False):
+            self._validate_mime_content(value)
+
         return value
+
+    @staticmethod
+    def _validate_mime_content(value):
+        """
+        Validate that the file's actual MIME type is consistent with its extension.
+        Reads the first 8KB to detect the real MIME type via python-magic.
+        """
+        from ..core.utils import detect_mime_type, get_file_extension
+
+        # Read a sample for detection, then seek back
+        sample = value.read(8192)
+        value.seek(0)
+
+        detected_mime = detect_mime_type(sample, value.name)
+        file_ext = get_file_extension(value.name)
+
+        # Build a mapping of dangerous mismatches
+        # We only block clearly dangerous cases: executable content disguised as safe types
+        dangerous_mimes = {
+            "application/x-executable",
+            "application/x-dosexec",
+            "application/x-msdos-program",
+            "application/x-msdownload",
+            "application/x-sharedlib",
+        }
+        safe_extensions = {
+            ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp", ".ico",
+            ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+            ".txt", ".rtf", ".csv", ".json", ".xml", ".html", ".css",
+            ".mp3", ".mp4", ".wav", ".avi", ".mov", ".webm",
+        }
+
+        if detected_mime in dangerous_mimes and file_ext in safe_extensions:
+            raise serializers.ValidationError(
+                f"File content type '{detected_mime}' does not match "
+                f"file extension '{file_ext}'. Upload rejected for security reasons."
+            )
