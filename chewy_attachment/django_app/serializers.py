@@ -59,16 +59,17 @@ class AttachmentSerializer(serializers.ModelSerializer):
         """
         try:
             from .storage import get_storage_engine_for_attachment
+            from ..core.storage import FileStorageEngine
+
             storage = get_storage_engine_for_attachment(obj.storage_config_id)
-            
-            # For cloud storage with direct URL support
-            if hasattr(storage, 'get_file_url'):
-                return storage.get_file_url(obj.storage_path)
-            else:
-                # For local storage, return download URL
+
+            # For local file storage, return the download URL (not the raw path)
+            if isinstance(storage, FileStorageEngine):
                 return self.get_download_url(obj)
+
+            # For cloud storage, return the direct/signed URL
+            return storage.get_file_url(obj.storage_path)
         except Exception:
-            # Fallback to download URL
             return self.get_download_url(obj)
 
     def get_created_at(self, obj):
