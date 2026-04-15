@@ -4,9 +4,8 @@ from django import forms
 from django.contrib import admin
 from django.utils.safestring import mark_safe
 
-from ..core.storage import FileStorageEngine
 from ..core.utils import generate_uuid
-from .models import Attachment, get_storage_root
+from .models import Attachment
 
 
 def format_file_size(size_bytes):
@@ -41,7 +40,8 @@ class AttachmentAddForm(forms.ModelForm):
             content = uploaded_file.read()
             original_name = uploaded_file.name
 
-            storage = FileStorageEngine(get_storage_root())
+            from .storage import get_storage_engine
+            storage = get_storage_engine()
             result = storage.save_file(content, original_name)
 
             instance.id = generate_uuid()

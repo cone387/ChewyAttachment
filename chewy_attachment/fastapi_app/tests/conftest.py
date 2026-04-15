@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine
 
 from chewy_attachment.core.schemas import UserContext
+from chewy_attachment.core.storage import StorageManager
 from chewy_attachment.fastapi_app import dependencies
 from chewy_attachment.fastapi_app.router import router
 
@@ -73,6 +74,10 @@ def app(db_engine):
     dependencies._engine = db_engine
     dependencies._storage_root = TEST_STORAGE
 
+    # Configure StorageManager for tests
+    manager = StorageManager(local_storage_root=TEST_STORAGE)
+    StorageManager.set_instance(manager)
+
     test_app.include_router(router)
 
     test_app.dependency_overrides[dependencies.get_current_user] = _get_test_current_user
@@ -80,6 +85,7 @@ def app(db_engine):
     yield test_app
 
     test_app.dependency_overrides.clear()
+    StorageManager.reset_instance()
 
 
 @pytest.fixture

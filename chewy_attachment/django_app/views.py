@@ -1,9 +1,12 @@
 """DRF views for ChewyAttachment"""
 
+import logging
+
+from django.apps import apps
 from django.conf import settings
 from django.db import connection
 from django.db.models import Sum, Count
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponseRedirect
 
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -13,13 +16,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from ..core.permissions import PermissionChecker, load_permission_class
-from ..core.storage import FileStorageEngine
+from ..core.storage import DjangoStorageEngine, S3StorageEngine
 from ..core.utils import generate_uuid
 from .. import __version__
-from django.apps import apps
-from .models import Attachment, get_storage_root
 from .permissions import IsAuthenticatedForUpload, IsOwnerOrPublicReadOnly
 from .serializers import AttachmentSerializer, AttachmentUploadSerializer
+
+logger = logging.getLogger("chewy_attachment")
 
 
 def get_attachment_model():
@@ -72,6 +75,15 @@ def get_permission_classes():
 
     # Default permission classes
     return [IsAuthenticatedForUpload, IsOwnerOrPublicReadOnly]
+
+
+def _is_cloud_storage(storage) -> bool:
+    """Check if the storage engine is a cloud storage backend."""
+    if isinstance(storage, S3StorageEngine):
+        return True
+    if isinstance(storage, DjangoStorageEngine) and not hasattr(storage.storage, 'path'):
+        return True
+    return False
 
 
 class AttachmentPagination(PageNumberPagination):
@@ -174,6 +186,28 @@ class AttachmentViewSet(viewsets.ModelViewSet):
         instance.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    def _serve_file(self, instance, disposition: str):
+        """Serve a file — redirect to cloud URL or stream from local storage."""
+        storage = self.get_storage_engine(instance.storage_config_id)
+        try:
+            if _is_cloud_storage(storage):
+                file_url = storage.get_file_url(instance.storage_path)
+                return HttpResponseRedirect(file_url)
+            else:
+                file_path = storage.get_file_path(instance.storage_path)
+                response = FileResponse(
+                    open(file_path, "rb"),
+                    content_type=instance.mime_type,
+                )
+                response["Content-Disposition"] = (
+                    f'{disposition}; filename="{instance.original_name}"'
+                )
+                response["Content-Length"] = instance.size
+                return response
+        except Exception:
+            logger.exception("Failed to serve file %s", instance.storage_path)
+            raise Http404("File not found on storage")
+
     @action(detail=True, methods=["get"], url_path="content")
     def download(self, request, pk=None):
         """Download file content"""
@@ -188,32 +222,7 @@ class AttachmentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        storage = self.get_storage_engine(instance.storage_config_id)
-
-        try:
-            # Check if this is a cloud storage that supports direct URLs
-            if hasattr(storage, 'get_file_url') and hasattr(storage, 'storage') and hasattr(storage.storage, 'url'):
-                # For django-storages cloud backends, redirect to signed URL
-                file_url = storage.get_file_url(instance.storage_path)
-                from django.http import HttpResponseRedirect
-                return HttpResponseRedirect(file_url)
-            elif hasattr(storage, 's3_client'):
-                # For S3StorageEngine, redirect to pre-signed URL
-                file_url = storage.get_file_url(instance.storage_path)
-                from django.http import HttpResponseRedirect
-                return HttpResponseRedirect(file_url)
-            else:
-                # For local storage, serve file directly
-                file_path = storage.get_file_path(instance.storage_path)
-                response = FileResponse(
-                    open(file_path, "rb"),
-                    content_type=instance.mime_type,
-                )
-                response["Content-Disposition"] = f'attachment; filename="{instance.original_name}"'
-                response["Content-Length"] = instance.size
-                return response
-        except Exception:
-            raise Http404("File not found on storage")
+        return self._serve_file(instance, disposition="attachment")
 
     @action(detail=True, methods=["get"], url_path="preview")
     def preview(self, request, pk=None):
@@ -229,86 +238,7 @@ class AttachmentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        storage = self.get_storage_engine(instance.storage_config_id)
-
-        try:
-            # Check if this is a cloud storage that supports direct URLs
-            if hasattr(storage, 'get_file_url') and hasattr(storage, 'storage') and hasattr(storage.storage, 'url'):
-                # For django-storages cloud backends, redirect to signed URL
-                file_url = storage.get_file_url(instance.storage_path)
-                from django.http import HttpResponseRedirect
-                return HttpResponseRedirect(file_url)
-            elif hasattr(storage, 's3_client'):
-                # For S3StorageEngine, redirect to pre-signed URL
-                file_url = storage.get_file_url(instance.storage_path)
-                from django.http import HttpResponseRedirect
-                return HttpResponseRedirect(file_url)
-            else:
-                # For local storage, serve file directly
-                file_path = storage.get_file_path(instance.storage_path)
-                response = FileResponse(
-                    open(file_path, "rb"),
-                    content_type=instance.mime_type,
-                )
-                response["Content-Disposition"] = f'inline; filename="{instance.original_name}"'
-                response["Content-Length"] = instance.size
-                return response
-        except Exception:
-            raise Http404("File not found on storage")
-
-
-class AttachmentDownloadView(APIView):
-    """
-    Alternative download view using APIView.
-
-    GET /files/{id}/content - Download file content
-
-    Custom Permissions:
-        Configure via CHEWY_ATTACHMENT["PERMISSION_CLASSES"]
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Dynamically load permission classes
-        self.permission_classes = get_permission_classes()
-
-    def get_object(self, pk):
-        """Get attachment by ID"""
-        Attachment = get_attachment_model()
-        try:
-            return Attachment.objects.get(pk=pk)
-        except Attachment.DoesNotExist:
-            raise Http404("Attachment not found")
-
-    def get(self, request, pk, format=None):
-        """Download file"""
-        attachment = self.get_object(pk)
-
-        self.check_object_permissions(request, attachment)
-
-        user_context = get_attachment_model().get_user_context(request)
-        file_metadata = attachment.to_file_metadata()
-
-        if not PermissionChecker.can_download(file_metadata, user_context):
-            return Response(
-                {"detail": "You do not have permission to download this file"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        storage = FileStorageEngine(get_storage_root())
-
-        try:
-            file_path = storage.get_file_path(attachment.storage_path)
-        except Exception:
-            raise Http404("File not found on storage")
-
-        response = FileResponse(
-            open(file_path, "rb"),
-            content_type=attachment.mime_type,
-        )
-        response["Content-Disposition"] = f'attachment; filename="{attachment.original_name}"'
-        response["Content-Length"] = attachment.size
-        return response
+        return self._serve_file(instance, disposition="inline")
 
 
 class HealthCheckView(APIView):

@@ -1,6 +1,7 @@
 """Utility functions for ChewyAttachment"""
 
 import mimetypes
+import unicodedata
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -50,7 +51,10 @@ def safe_filename(filename: str) -> str:
     Sanitize filename to prevent directory traversal and other issues.
 
     Returns only the basename without any directory components.
+    Applies Unicode NFC normalization to prevent homograph attacks.
     """
-    name = Path(filename).name
+    name = unicodedata.normalize("NFC", filename)
+    name = Path(name).name
     name = name.replace("\x00", "")
-    return name if name else "unnamed"
+    name = "".join(c for c in name if unicodedata.category(c)[0] != "C")
+    return name.strip() if name.strip() else "unnamed"
